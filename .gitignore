@@ -1,6 +1,7 @@
 support_data/body_models/smplh
 src/lvd_templ/__pycache__
 *.pyc
+/datafolder
 human_body_prior*
 storage/1ljjfnbx
 utils_cop
