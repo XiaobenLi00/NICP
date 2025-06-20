@@ -11,18 +11,23 @@ import tqdm
 import torch
 import trimesh
 import gc
-
+import pickle
+import sys
+sys.path.append('/home/lixiaoben/projects/NICP')
 from utils_cop.prior import MaxMixturePrior
-from utils_cop.SMPL import SMPL
+# from utils_cop.SMPL import SMPL
+from smplx import SMPL
+
 
 from nn_core.common import PROJECT_ROOT
 from nn_core.serialization import NNCheckpointIO
 
-from lvd_templ.paths import chk_pts, home_dir, output_dir as out_folder, path_demo, path_demo_guess_rot, path_FAUST_train_reg, path_FAUST_train_scans
+from lvd_templ.paths import chk_pts, home_dir, output_dir as out_folder, path_demo, path_demo_guess_rot # path_FAUST_train_reg, path_FAUST_train_scans
 from lvd_templ.data.datamodule_AMASS import MetaData
 from lvd_templ.evaluation.utils import vox_scan, fit_LVD, selfsup_ref, SMPL_fitting, fit_cham, fit_plus_D
 
 import warnings
+from trimesh import transformations
 warnings.filterwarnings("ignore")
 
 ## Device
@@ -36,22 +41,23 @@ def export_mesh(T, r,t,s, path):
         k = T.export(path)
         return
 
-## Here you can set the path for different datasets
-def get_dataset(name):
-    if name=='demo':
-        return path_demo
-    if name=='demo_guess_rot':
-        return path_demo_guess_rot
-    if name=='FAUST_train_scans':
-        return path_FAUST_train_scans
-    if name=='FAUST_train_reg':
-        return path_FAUST_train_reg
-    raise ValueError('this challenge does not exists')
+# ## Here you can set the path for different datasets
+# def get_dataset(name):
+#     if name=='demo':
+#         return path_demo
+#     if name=='demo_guess_rot':
+#         return path_demo_guess_rot
+#     if name=='FAUST_train_scans':
+#         return path_FAUST_train_scans
+#     if name=='FAUST_train_reg':
+#         return path_FAUST_train_reg
+#     raise ValueError('this challenge does not exists')
 
 ## Function to load checkpoint
 def get_model(chk):
     # Recovering the Path to the checkpoint
     chk_zip = glob.glob(chk + 'checkpoints/*.zip')[0]
+    print(f"loading model ckpt: {chk_zip}")
     
     # Restoring the network configurations using the Hydra Settings
     tmp = hydra.core.global_hydra.GlobalHydra.instance().clear()
@@ -85,34 +91,76 @@ def run(cfg: DictConfig) -> str:
     if not(os.path.exists(out_folder + model_name)):
         os.mkdir(out_folder + model_name)
         
-    out_dir = out_folder + model_name + '/' + cfg['core'].challenge 
+    # out_dir = out_folder + model_name + '/' + cfg['core'].challenge 
+    out_dir = out_folder + model_name + '/' + 'cape_eq_pred_inner_points'
+    # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
      
     if not(os.path.exists(out_dir)):
         os.mkdir(out_dir)
     
     # Recover Data Path
-    path_in = get_dataset(cfg['core'].challenge)
+    # path_in = get_dataset(cfg['core'].challenge)
+    # path_in = '/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/model_ratio20_from_PTF/'
+    path_in = '/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/cape_eq_epoch_34_test'
+    path_info = '/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/smpl_reorganized'
+    assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
     
     # How the data are organized
     if(cfg['core'].challenge in ('demo','demo_guess_rot')):
-        scans = glob.glob(path_in + '*/*.ply')
-    else:
-        scans = glob.glob(path_in + '*.ply')
+        # all_scans = glob.glob(os.path.join(path_in, '*/*.obj'))
+        scans = sorted(glob.glob(os.path.join(path_in, '*/*.npz')))
+
+    # filtering and sampling with ratio=4
+    # print("start filtering scans with eval ids")
+    # eval_ids = ['00122', '00159', '00215']
+    # Get all existing output directories
+    # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
+    
+    # # Filter scans that haven't been processed yet
+    # filtered_scans = []
+    # for scan in scans:
+    #     scan_id = os.path.basename(scan)[23:-4]
+    #     if scan_id not in existing_ids:
+    #         filtered_scans.append(scan)
+    
+    # scans = filtered_scans
+    # scans_part1 = scans[:len(scans)//2]
+    # scans_part2 = scans[len(scans)//2:]
+    # # scans = scans_part1
+    # np.save(out_dir + '/scans_part1.npy', scans_part1)
+    # np.save(out_dir + '/scans_part2.npy', scans_part2)
+    scans = np.load(out_dir + '/scans_part2.npy')
+    # exit()
+
+    # scans = sorted([scan for scan in all_scans if os.path.basename(scan)[:5] in eval_ids])
+    gender_dict = {0: 'female', 1: 'male'}
+    print(f"number of target eval scans: {len(scans)}")
+    # print(f"number of filtered target eval scans: {len(filtered_scans)}")
+    # exit()
+        
 
     print('--------------------------------------------')
-    print(f'List of target scans: {scans}')
+    # print(f'List of target scans: {scans}')
     
     # You can add an initial rotation for the shapes to align
     # The axis.This one works for the FAUST shapes
     
     origin, xaxis = [0, 0, 0], [1, 0, 0]
-    if cfg['core'].challenge in ('demo','demo_guess_rot'):
-        alpha = np.pi/2 #0
-    else:
-        alpha = np.pi/2
+    # if cfg['core'].challenge in ('demo','demo_guess_rot'):
+    #     alpha = np.pi/2 #0
+    # else:
+        # alpha = np.pi/2
+    alpha = 0
+    # Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
+    # inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
+
+    # print(Rx)
+    # print(inv_Rx)
+
+    # exit()
       
     ### Get SMPL model
-    SMPL_model = SMPL('neutral_smpl_with_cocoplus_reg.txt', obj_saveable = True).cuda()
+    # SMPL_model = SMPL('neutral_smpl_with_cocoplus_reg.txt', obj_saveable = True).cuda()
     prior = MaxMixturePrior(prior_folder='utils_cop/prior/', num_gaussians=8) 
     prior.to(device)
     
@@ -126,7 +174,7 @@ def run(cfg: DictConfig) -> str:
     gt_idxs = train_data.idxs
     data_type = cfg_model['nn']['data']['datasets']['type']
     grad = cfg_model['nn']['module']['grad']
- 
+
     print('--------------------------------------------')
     print('--------------------------------------------')               
     ### REGISTRATIONS FOR ALL THE INPUT SHAPES
@@ -143,7 +191,23 @@ def run(cfg: DictConfig) -> str:
         # if(cfg['core'].challenge == 'demo'):
         #     name = os.path.basename(os.path.dirname(scan))
         # else:
-        name = os.path.basename(scan)[:-4]
+        name = os.path.basename(scan)[23:-4]
+        id_ = name
+        print(id_)
+        # exit()
+        gt_smpl_info = np.load(os.path.join(path_info, id_, f"info_{id_}.npz"))
+        gender = gender_dict[gt_smpl_info['gender'].item()]
+        print('gender:', gender)
+        if gender == 'neutral':
+            body_model_path = 'datafolder/body_models/smpl/neutral/SMPL_NEUTRAL_10pc_rmchumpy.pkl'
+        elif gender == 'female':
+            body_model_path = 'datafolder/body_models/smpl/female/SMPL_FEMALE_10pc.pkl'
+        elif gender == 'male':
+            body_model_path = 'datafolder/body_models/smpl/male/SMPL_MALE_10pc.pkl'
+        else:
+            raise ValueError(f'Unexpected gender: {gender}')
+        SMPL_model = SMPL(body_model_path, create_body_pose=False,
+                      create_betas=False, create_global_orient=False).cuda()
          
         # If we want to use the Neural ICP Refinement    
         if cfg['core'].ss_ref:
@@ -151,48 +215,13 @@ def run(cfg: DictConfig) -> str:
             module, MD, train_data, cfg_model = get_model(chk)
         
         # Read input shape       
-        scan_src = trimesh.load(scan, process=False, maintain_order=True)
+        # scan_src = trimesh.load(scan, process=False, maintain_order=True)
+        input_points = np.load(scan)['pred_inner_points']
+        # input_points = np.load(scan)['hitpts']
+        scan_src = trimesh.PointCloud(input_points)
         
-        # EXPERIMENTAL FEATURE: you can use NICP loss to guess the best rotation for the input shape
-
-        if cfg['core'].guess_rot==True:   
-            print("Seeking for the rotation that minimizes NICP...")
-            best_loss = np.inf
-            set_axis = [[1, 0, 0],[0, 1, 0],[0, 0, 1],[0, 1, 1],[1, 1, 0],[1, 0, 1]]
-            set_angles = np.linspace(0,2*np.pi,5)
-            for ax in set_axis:
-                for al in set_angles:
-                    Rx = trimesh.transformations.rotation_matrix(al, ax)
-                    with torch.no_grad():
-                        mesh_src_copy = scan_src.copy()
-                        voxel_src, mesh_src, scale, trasl = vox_scan(mesh_src_copy, res, style=data_type, grad=grad)
-                        
-                        # Extract Features
-                        module.model(voxel_src)
-                        input_points = torch.tensor(np.asarray(mesh_src.vertices))
-                        factor = max(1, int(input_points.shape[0] / 20000))
-                        input_points = input_points[torch.randperm(input_points.size()[0])]
-                        input_points_res = input_points[1:input_points.shape[0]:factor,:].type(torch.float32).unsqueeze(0).cuda()
-                                        
-                        # Query points on the target surface
-                        pred_dist = module.model.query(input_points_res)
-                        
-                        pred_dist = pred_dist.reshape(1, gt_points, 3, -1).permute(0, 1, 3, 2)
-                        
-                        # Collect the offset with the minimum norm for each target vertex
-                        v, _ = torch.min(torch.sum(pred_dist**2,axis=3),axis=1)
-                        
-                        # Global loss
-                        if  torch.sum(v)<best_loss:
-                            best_loss = torch.sum(v)
-                            best_alpha = al
-                            best_axis = ax
-            Rx = trimesh.transformations.rotation_matrix(al, ax)
-            inv_Rx = trimesh.transformations.rotation_matrix(-al, ax)
-            print("Done!")
-        else:
-            Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
-            inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
+        Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
+        inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
         
         # Canonicalize the input point cloud and prepare input of IF-NET
         scan_src.apply_transform(Rx)
@@ -230,19 +259,27 @@ def run(cfg: DictConfig) -> str:
         
         # Fit LVD
         reg_src =  fit_LVD(module, gt_points, voxel_src, iters=cfg['lvd'].iters, init=init)
-            
+
+        # apply inv_Rx, trasl, scale to the reg_src
+        reg_src = reg_src * scale + trasl
+        reg_src = transformations.transform_points(reg_src, inv_Rx)
+
         # FIT SMPL Model to the LVD Prediction
         out_s, params = SMPL_fitting(SMPL_model, reg_src, gt_idxs, prior, iterations=2000)
         params_np = {}
         for p in params.keys():
             params_np[p] = params[p].detach().cpu().numpy()
+        
+        np.savez(out_dir +'/'+ name + '/pred_smpl_info_before_cham_refine.npz', pose=params_np['pose'][:, 3:].reshape(23, 3), betas=params_np['beta'].reshape(10), global_orient=params_np['pose'][:, :3].reshape(3), transl=params_np['trans'].reshape(3), joints=params_np['joints'].reshape(45, 3))
+        
             
         # Save intermidiate output 
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices = out_s, faces = SMPL_model.faces) 
-        export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')   
-        np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
+        T.export(out_dir +'/'+ name + '/' + out_name + '.ply')
+        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')   
+        # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
         
         # SMPL Refinement with Chamfer            
         if cfg['core'].cham_ref:
@@ -253,12 +290,23 @@ def run(cfg: DictConfig) -> str:
             # cham_bidir = 0  -> Full and clean input
             # cham_bidir = 1  -> Partial input
             # cham_bidir = -1 -> Noise input
+
+            # apply inv_Rx, trasl, scale to the mesh_src.vertices
+            mesh_src.vertices = mesh_src.vertices * scale + trasl
+            mesh_src.vertices = transformations.transform_points(mesh_src.vertices, inv_Rx)
             out_cham_s, params = fit_cham(SMPL_model, out_s, mesh_src.vertices, prior,params,cfg['core'].cham_bidir)
+            params_np = {}
+            for p in params.keys():
+                params_np[p] = params[p].detach().cpu().numpy()
             
+            np.savez(out_dir +'/'+ name + '/pred_smpl_info_after_cham_refine.npz', pose=params_np['pose'][:, 3:].reshape(23, 3), betas=params_np['beta'].reshape(10), global_orient=params_np['pose'][:, :3].reshape(3), transl=params_np['trans'].reshape(3), joints=params_np['joints'].reshape(45, 3))
+
             # Save Output
             T = trimesh.Trimesh(vertices = out_cham_s, faces = SMPL_model.faces)
-            export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')   
-            
+            # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')   
+            T.export(out_dir +'/'+ name + '/' + out_name + '.ply')
+
+
             # DEBUG: Save some params of the fitting to check quality of the registration          
             # for p in params.keys():
             #     params[p] = params[p].detach().cpu().numpy()            
@@ -267,15 +315,15 @@ def run(cfg: DictConfig) -> str:
             # Update the name
             out_s = out_cham_s
         
-        # SMPL Refinement with +D
-        if cfg['core'].plusD:
-            smpld_vertices, faces, params = fit_plus_D(out_s, SMPL_model, mesh_src.vertices, subdiv= 1, iterations=300)
-            T = trimesh.Trimesh(vertices = smpld_vertices, faces = faces)
-            out_name_grid = out_name + '_+D'
-            export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name_grid + '.ply') 
+        # # SMPL Refinement with +D
+        # if cfg['core'].plusD:
+        #     smpld_vertices, faces, params = fit_plus_D(out_s, SMPL_model, mesh_src.vertices, subdiv= 1, iterations=300)
+        #     T = trimesh.Trimesh(vertices = smpld_vertices, faces = faces)
+        #     out_name_grid = out_name + '_+D'
+        #     export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name_grid + '.ply') 
         gc.collect()
         
-@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_cape")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 

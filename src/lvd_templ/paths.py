@@ -1,5 +1,5 @@
 ########## Update these paths
-home_dir                          = '/home/ubutnu/Documents/Projects/NICP'
+home_dir                          = '/home/lixiaoben/projects/NICP'
 
 # Where are the shapes
 path_FAUST_train_scans            ='/mnt/sda/MPIFAUST/training/scans/' 

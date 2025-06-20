@@ -1,14 +1,14 @@
 # Path to the cloned repo with src folder inside
-HUMAN_BODY_PRIOR_REPO = "/home/ubutnu/Documents/Projects/preprocpub/prior"
+HUMAN_BODY_PRIOR_REPO = "/home/lixiaoben/projects/human_body_prior"
 
 # Path to the cloned repo
-AMASS_REPO = "/home/ubutnu/Documents/Projects/preprocpub/AMASS"
+AMASS_REPO = "/home/lixiaoben/projects/amass"
 
 # relative to AMASS_REPO or absolute
-SMPL_DIR = "/mnt/sda/Projects/AMASS/support_data/body_models/smplh"
+SMPL_DIR = "/home/lixiaoben/projects/NICP/datafolder/body_models/smplx_amass_lockedhead"
 
 # Path to extracted AMASS data
-AMASS_DATA = "/mnt/sda/Projects/AMASS/support_data/amass_npz/"
+AMASS_DATA = "/home/lixiaoben/projects/NICP/datafolder/AMASS/amass_smplx_n_npz"
 
 # Path to preprocessed data
-TARGET_DATA = "/mnt/sdb/out_AMASS"
+TARGET_DATA = "/home/lixiaoben/projects/NICP/datafolder/AMASS/out_nicp_smplx_n"

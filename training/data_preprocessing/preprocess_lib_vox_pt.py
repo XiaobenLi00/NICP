@@ -25,7 +25,7 @@ from utils.parallel_map import parallel_map
 ## SET RESOLUTION OF THE VOXELIZATION
 res = 64 
 
-faces = np.load("./assets/faces.npy")
+faces = np.load("./assets/faces_smplx.npy")
 
 
 ### VOXELIZATION UTILS  ####
@@ -147,7 +147,7 @@ def main(cfg):
         # collector.start()
         parallel_map(k, voxelize_distance, n_jobs=args.jobs, const_args={
         "mesh_faces": faces,
-        "res": cfg.res,
+        "res": 64,
         "OUT_PATH_OCC" :OUT_PATH_OCC,
         "OUT_PATH_SCAL" : OUT_PATH_SCAL
     }, tqdm_kwargs={"leave": False}

@@ -507,7 +507,7 @@ def fit_cham(SMPL_model, pred_mesh, vertices_scan, prior,init, bidir=0):
         params['trans'] = trans 
         params['joints'] = joints
     return pred_mesh3, params
-                      
+                    
 def get_match_LVD(s_src, s_tar, reg_src, reg_tar):
     # Returns for each point of s_src the match for s_tar
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(reg_src)

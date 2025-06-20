@@ -74,20 +74,20 @@ def dump_amass2pytroch(datasets, amass_dir, out_posepath, logger = None, rnd_see
         logger('Creating pytorch dataset at %s' % out_posepath)
 
     data_pose = []
-    data_dmpl = []
+    # data_dmpl = []
     data_betas = []
     data_gender = []
     data_trans = []
     data_v = []
     
     for ds_name in datasets:
-        npz_fnames = glob.glob(os.path.join(amass_dir, ds_name, '*/*/*_poses.npz'))
+        npz_fnames = glob.glob(os.path.join(amass_dir, ds_name, '*/*/*_stageii.npz'))
         if len(npz_fnames)==0:
-            npz_fnames = glob.glob(os.path.join(amass_dir, ds_name, '*/*_poses.npz'))
+            npz_fnames = glob.glob(os.path.join(amass_dir, ds_name, '*/*_stageii.npz'))
         logger('randomly selecting data points from %s.' % (ds_name))
         for npz_fname in tqdm(npz_fnames):
             try:
-                cdata = np.load(npz_fname)
+                cdata = np.load(npz_fname, allow_pickle=True)
             except:
                 logger('Could not read %s! skipping..'%npz_fname)
                 continue
@@ -98,7 +98,7 @@ def dump_amass2pytroch(datasets, amass_dir, out_posepath, logger = None, rnd_see
             data =  {k: cdata[k] for k in cdata.keys()}
             data['betas'] =  torch.tensor(np.repeat(cdata['betas'][np.newaxis].astype(np.float32), repeats=len(cdata['poses']), axis=0))
             data_pose.extend(cdata['poses'][cdata_ids].astype(np.float32))
-            data_dmpl.extend(cdata['dmpls'][cdata_ids].astype(np.float32))
+            # data_dmpl.extend(cdata['dmpls'][cdata_ids].astype(np.float32))
             data_trans.extend(cdata['trans'][cdata_ids].astype(np.float32))
             data_betas.extend(np.repeat(cdata['betas'][np.newaxis].astype(np.float32), repeats=len(cdata_ids), axis=0))
             data_gender.extend([gdr2num[str(cdata['gender'].astype(str))] for _ in cdata_ids])
@@ -108,14 +108,18 @@ def dump_amass2pytroch(datasets, amass_dir, out_posepath, logger = None, rnd_see
             d = {k:torch.tensor(v,dtype=torch.float32).to(comp_device)[cdata_ids] for k,v in data.items() if k in ['poses', 'betas']}
             d['root_orient'] = d['poses'][:,0:3]
             d['pose_body'] = d['poses'][:,3:66]
-            d['pose_hand'] = d['poses'][:,66:156]
+            d['pose_jaw'] = d['poses'][:,66:69]
+            d['pose_eye'] = d['poses'][:,69:75]
+            d['pose_hand'] = d['poses'][:,75:165]
+            
+            
             body_v = bm.forward(**d).v
             data_v.extend(np.reshape(body_v.detach().cpu().numpy().astype(np.float32),(-1,body_v.shape[1]*body_v.shape[2])))
 
     assert len(data_pose) != 0
 
     torch.save(torch.tensor(np.asarray(data_pose, np.float32)), out_posepath)
-    torch.save(torch.tensor(np.asarray(data_dmpl, np.float32)), out_posepath.replace('pose.pt', 'dmpl.pt'))
+    # torch.save(torch.tensor(np.asarray(data_dmpl, np.float32)), out_posepath.replace('pose.pt', 'dmpl.pt'))
     torch.save(torch.tensor(np.asarray(data_betas, np.float32)), out_posepath.replace('pose.pt', 'betas.pt'))
     torch.save(torch.tensor(np.asarray(data_trans, np.float32)), out_posepath.replace('pose.pt', 'trans.pt'))
     torch.save(torch.tensor(np.asarray(data_gender, np.int32)), out_posepath.replace('pose.pt', 'gender.pt'))
@@ -166,23 +170,28 @@ def prepare_amass(amass_splits, amass_dir, work_dir, logger=None):
     shutil.copy2(sys.argv[0], os.path.join(work_dir, os.path.basename(sys.argv[0])))
 
     logger('Stage I: Fetch data from AMASS npz files')
+    
 
-    for split_name, datasets in amass_splits.items():
-        outpath = makepath(os.path.join(stageI_outdir, split_name, 'pose.pt'), isfile=True)
-        if os.path.exists(outpath): continue
-        dump_amass2pytroch(datasets, amass_dir, outpath, logger=logger)
+    # for split_name, datasets in amass_splits.items():
+    #     outpath = makepath(os.path.join(stageI_outdir, split_name, 'pose.pt'), isfile=True)
+    #     if os.path.exists(outpath): continue
+    #     dump_amass2pytroch(datasets, amass_dir, outpath, logger=logger)
+    
+    logger('Done!')
+    
+    # exit()
 
     logger('Stage II: augment the data and save into h5 files to be used in a cross framework scenario.')
 
 
     class AMASS_ROW(pytables.IsDescription):
         gender = pytables.Int16Col(1)  # 1-character String
-        pose = pytables.Float32Col(52*3)  # float  (single-precision)
-        dmpl = pytables.Float32Col(8)  # float  (single-precision)
-        pose_matrot = pytables.Float32Col(52*9)  # float  (single-precision)
+        pose = pytables.Float32Col(55*3)  # float  (single-precision)
+        # dmpl = pytables.Float32Col(8)  # float  (single-precision)
+        pose_matrot = pytables.Float32Col(55*9)  # float  (single-precision)
         betas = pytables.Float32Col(16)  # float  (single-precision)
         trans = pytables.Float32Col(3)  # float  (single-precision)
-        data_v = pytables.Float32Col(6890 * 3)  # float  (single-precision)
+        data_v = pytables.Float32Col(10475 * 3)  # float  (single-precision)
 
 
     stageII_outdir = makepath(os.path.join(work_dir, 'stage_II'))
@@ -241,7 +250,7 @@ def prepare_amass(amass_splits, amass_dir, work_dir, logger=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMASS dataset preparation')
     parser.add_argument('-c', "--config", type=str, default='config.toml', help='Path to config')
-    parser.add_argument("exp_code", type=str, help="Experiment code (VERSION_SUBVERSION_TRY)")
+    parser.add_argument("exp_code", type=str, default="AUG_1_1", help="Experiment code (VERSION_SUBVERSION_TRY)")
     arguments = parser.parse_args()
 
     config = load_config(arguments.config)
@@ -254,13 +263,17 @@ if __name__ == '__main__':
     from human_body_prior.tools.rotation_tools import aa2matrot, em2euler, euler2em
 
 
-    bm_fname = str(config["SMPL_DIR"] / "neutral" / "model.npz")
+    bm_fname = str(config["SMPL_DIR"] / "SMPLX_NEUTRAL.npz")
     num_betas = 16 # number of body parameters
-    num_dmpls = 8 # number of DMPL parameters
+    # num_dmpls = 8 # number of DMPL parameters
 
     gdr2num = {'male':-1, 'neutral':0, 'female':1}
     gdr2num_rev = {v:k for k,v in gdr2num.items()}
     comp_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # bm = BodyModel(bm_fname=bm_fname, num_betas=num_betas).to(comp_device)
+    
+    # exit()
 
 
     # ['CMU', 'Transitions_mocap', 'MPI_Limits', 'SSM_synced', 'TotalCapture', 'Eyes_Japan_Dataset', 'MPI_mosh', 'MPI_HDM05', 'HumanEva', 'ACCAD', 'EKUT', 'SFU', 'KIT', 'H36M', 'TCD_handMocap', 'BML']
@@ -280,7 +293,7 @@ if __name__ == '__main__':
     amass_splits = {
         'vald': ['HumanEva', 'HDM05', 'SFU', 'MoSh'],
         'test': ['Transitions', 'SSM'],
-        'train': ['CMU', 'PosePrior', 'TotalCapture', 'EyesJapanDataset', 'KIT', 'BML', 'EKUT', 'TCDHands']#ACCAD
+        'train': ['CMU', 'PosePrior', 'TotalCapture', 'Eyes_Japan_Dataset', 'KIT', 'BMLmovi', 'BMLrub', 'EKUT', 'TCDHands']#ACCAD
     }
     amass_splits['train'] = list(set(amass_splits['train']).difference(set(amass_splits['test'] + amass_splits['vald'])))
 
