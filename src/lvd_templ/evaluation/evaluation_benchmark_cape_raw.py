@@ -92,7 +92,7 @@ def run(cfg: DictConfig) -> str:
         os.mkdir(out_folder + model_name)
         
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge 
-    out_dir = out_folder + model_name + '/' + 'cape_raw_nicp'
+    out_dir = out_folder + model_name + '/' + 'cape_raw_nicp_20000'
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
      
     if not(os.path.exists(out_dir)):
@@ -230,6 +230,11 @@ def run(cfg: DictConfig) -> str:
         
         # Read input shape       
         scan_src = trimesh.load(scan, process=False, maintain_order=True)
+
+        sample_points, _ = trimesh.sample.sample_surface(
+            scan_src, 20000
+        )
+        scan_src = trimesh.PointCloud(sample_points)
         # input_points = np.load(scan)['pred_inner_points']
         # input_points = np.load(scan)['hitpts']
         # scan_src = trimesh.PointCloud(input_points)

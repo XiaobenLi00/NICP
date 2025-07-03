@@ -15,7 +15,7 @@ def main():
 
     gt_smpl_folder = 'datafolder/CAPE_reorganized/cape_release/smpl_reorganized'
     # gt_scan_folder = 'datafolder/CAPE_reorganized/cape_release/model_reorganized'
-    pred_folder = 'output/matchAMASS_CAPE/cape_raw_nicp'
+    pred_folder = 'output/matchAMASS_CAPE/cape_raw_nicp_20000'
 
     # gt_smpl_folder = "datafolder/4D-DRESS/data_processed/smplh"
     # pred_folder = "/home/boqian/code/NICP/output/matchAMASS_4D-DRESS/demo"
