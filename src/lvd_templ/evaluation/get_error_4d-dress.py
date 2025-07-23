@@ -7,6 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 import matplotlib.pyplot as plt
 from smplx import SMPL
+import json
 
 
 # CAPE without chamfer refinement
@@ -29,11 +30,15 @@ def main():
     t_body = trimesh.Trimesh(
         vertices=t_body.vertices.detach().cpu().numpy()[0], faces=SMPL_model.faces
     )
+
+    with open("src/lvd_templ/evaluation/smpl_vert_segmentation.json", "r") as f:
+        smpl_seg = json.load(f)
+    body_parts = list(smpl_seg.keys())  # 24个部位
     # exit()
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_name = "4d-dress_gen_eq_hitpts"
-    log_tensorboard = True
+    exp_name = "4d-dress_hitpts"
+    log_tensorboard = False
     if log_tensorboard:
         tensorboard_name = f"{timestamp}_{exp_name}"
         writer = SummaryWriter(
@@ -42,7 +47,10 @@ def main():
                 tensorboard_name,
             )
         )
-    save_error_mesh = True
+    save_error_mesh = False
+    save_error_mesh_mean = True
+    save_part_error_mean = True
+    save_log_file = False
 
     flag = 1  # 0: before cham_refine, 1: after cham_refine
     # mode = "before_cham_refine" if flag == 0 else "after_cham_refine"
@@ -74,12 +82,25 @@ def main():
         os.remove(mpjpe_file_cham)
     all_v2v_map = np.zeros((6890,))
     all_v2v_map_cham = np.zeros((6890,))
-    for name in tqdm(sorted(os.listdir(pred_folder))):
+    if save_part_error_mean:
+        if sample_num == 0:
+            part_v2v_all = {part: [] for part in body_parts}
+            part_v2v_all_cham = {part: [] for part in body_parts}
+    for name in tqdm(sorted(os.listdir(os.path.join(pred_folder, "vis")))):
+
+        os.rename(
+            os.path.join(pred_folder, "vis", name, "outtag_4d-dress_ss.ply"),
+            os.path.join(pred_folder, "vis", name, "4d-dress_ss.ply"),
+        )
+        os.rename(
+            os.path.join(pred_folder, "vis", name, "outtag_4d-dress_ss_cham_0.ply"),
+            os.path.join(pred_folder, "vis", name, "4d-dress_ss_cham.ply"),
+        )
 
         # v2v
-        pred_smpl_path = os.path.join(pred_folder, name, "outtag_4d-dress_ss.ply")
+        pred_smpl_path = os.path.join(pred_folder, "vis", name, "4d-dress_ss.ply")
         pred_smpl_path_cham = os.path.join(
-            pred_folder, name, "outtag_4d-dress_ss_cham_0.ply"
+            pred_folder, "vis", name, "4d-dress_ss_cham.ply"
         )
         # assert os.path.isfile(pred_smpl_path)
         if not os.path.isfile(pred_smpl_path):
@@ -119,17 +140,27 @@ def main():
         gt_smpl_mesh.vertices = gt_smpl_vertices
         gt_scan_mesh.vertices = gt_scan_vertices
 
+        # gt_smpl_mesh.export(os.path.join(pred_folder, "vis", name, "gt_smpl.ply"))
+        # gt_scan_mesh.export(os.path.join(pred_folder, "vis", name, "gt_scan.ply"))
+
         gt_smpl_verts = np.asarray(gt_smpl_mesh.vertices)
         pred_smpl_verts = np.asarray(pred_smpl_mesh.vertices)
         pred_smpl_verts_cham = np.asarray(pred_smpl_mesh_cham.vertices)
+        vertex_errors = np.linalg.norm(gt_smpl_verts - pred_smpl_verts, axis=1)
+        vertex_errors_cham = np.linalg.norm(
+            gt_smpl_verts - pred_smpl_verts_cham, axis=1
+        )
+        all_v2v_map += vertex_errors
+        all_v2v_map_cham += vertex_errors_cham
+        if save_part_error_mean:
+            for part in body_parts:
+                idxs = smpl_seg[part]
+                part_v2v_all[part].append(vertex_errors[idxs])
+                part_v2v_all_cham[part].append(vertex_errors_cham[idxs])
 
         if save_error_mesh:
             # before chamfer refine
             # 1. 计算每个顶点的误差
-            vertex_errors = np.linalg.norm(
-                gt_smpl_verts - pred_smpl_verts, axis=1
-            )  # shape: (6890,)
-            all_v2v_map += vertex_errors
             # 2. 归一化误差
             min_err = vertex_errors.min()
             max_err = vertex_errors.max()
@@ -147,14 +178,11 @@ def main():
 
             # 保存带颜色的 mesh
             colored_mesh.export(
-                os.path.join(pred_folder, name, "4d-dress_ss_error.ply")
+                os.path.join(pred_folder, "vis", name, "4d-dress_ss_error.ply")
             )
 
             # after chamfer refine
-            vertex_errors_cham = np.linalg.norm(
-                gt_smpl_verts - pred_smpl_verts_cham, axis=1
-            )
-            all_v2v_map_cham += vertex_errors_cham
+
             min_err_cham = vertex_errors_cham.min()
             max_err_cham = vertex_errors_cham.max()
             norm_errors_cham = (vertex_errors_cham - min_err_cham) / (
@@ -167,7 +195,7 @@ def main():
                 np.uint8
             )
             colored_mesh_cham.export(
-                os.path.join(pred_folder, name, "4d-dress_ss_error_cham.ply")
+                os.path.join(pred_folder, "vis", name, "4d-dress_ss_error_cham.ply")
             )
         # exit()
 
@@ -182,20 +210,25 @@ def main():
             writer.add_scalar("v2v_error", v2v_error, sample_num)
             writer.add_scalar("v2v_error_cham", v2v_error_cham, sample_num)
 
-        with open(v2v_file, "a") as f:
-            f.write(f"{name} {v2v_error}\n")
-        with open(v2v_file_cham, "a") as f:
-            f.write(f"{name} {v2v_error_cham}\n")
+        if save_log_file:
+            with open(v2v_file, "a") as f:
+                f.write(f"{name} {v2v_error}\n")
+            with open(v2v_file_cham, "a") as f:
+                f.write(f"{name} {v2v_error_cham}\n")
         all_v2v_error += v2v_error
         all_v2v_error_cham += v2v_error_cham
 
         # mpjpe
         considered_joints_num = 22
         pred_info = np.load(
-            os.path.join(pred_folder, name, "pred_smpl_info_before_cham_refine.npz")
+            os.path.join(
+                pred_folder, "vis", name, "pred_smpl_info_before_cham_refine.npz"
+            )
         )
         pred_info_cham = np.load(
-            os.path.join(pred_folder, name, "pred_smpl_info_after_cham_refine.npz")
+            os.path.join(
+                pred_folder, "vis", name, "pred_smpl_info_after_cham_refine.npz"
+            )
         )
         pred_joints = pred_info["joints"]
         pred_joints_cham = pred_info_cham["joints"]
@@ -215,10 +248,11 @@ def main():
         ).mean()
         # print(mpjpe_error)
         # print(mpjpe_error_cham)
-        with open(mpjpe_file, "a") as f:
-            f.write(f"{name} {mpjpe_error}\n")
-        with open(mpjpe_file_cham, "a") as f:
-            f.write(f"{name} {mpjpe_error_cham}\n")
+        if save_log_file:
+            with open(mpjpe_file, "a") as f:
+                f.write(f"{name} {mpjpe_error}\n")
+            with open(mpjpe_file_cham, "a") as f:
+                f.write(f"{name} {mpjpe_error_cham}\n")
         if log_tensorboard:
             writer.add_scalar("mpjpe_error", mpjpe_error, sample_num)
             writer.add_scalar("mpjpe_error_cham", mpjpe_error_cham, sample_num)
@@ -227,8 +261,124 @@ def main():
 
         sample_num += 1
         # break
+    if save_part_error_mean:
+        part_v2v_all_flat = {
+            part: np.concatenate(part_v2v_all[part]) for part in body_parts
+        }
+        part_v2v_all_flat_cham = {
+            part: np.concatenate(part_v2v_all_cham[part]) for part in body_parts
+        }
 
-    if save_error_mesh:
+        mean_part_v2v = {part: np.mean(part_v2v_all_flat[part]) for part in body_parts}
+        mean_part_v2v_cham = {
+            part: np.mean(part_v2v_all_flat_cham[part]) for part in body_parts
+        }
+        all_v2v = np.concatenate([part_v2v_all_flat[part] for part in body_parts])
+        all_v2v_cham = np.concatenate(
+            [part_v2v_all_flat_cham[part] for part in body_parts]
+        )
+        mean_v2v_all = all_v2v.mean()
+        mean_v2v_all_cham = all_v2v_cham.mean()
+
+        # 去掉hand
+        exclude_hands = ["leftHand", "rightHand"]
+        include_parts_no_hand = [p for p in body_parts if p not in exclude_hands]
+        v2v_no_hand = np.concatenate(
+            [part_v2v_all_flat[p] for p in include_parts_no_hand]
+        )
+        v2v_no_hand_cham = np.concatenate(
+            [part_v2v_all_flat_cham[p] for p in include_parts_no_hand]
+        )
+        mean_v2v_no_hand = v2v_no_hand.mean()
+        mean_v2v_no_hand_cham = v2v_no_hand_cham.mean()
+
+        # 去掉hand和index1
+        exclude_hands_index = [
+            "leftHand",
+            "rightHand",
+            "leftHandIndex1",
+            "rightHandIndex1",
+        ]
+        include_parts_no_hand_index = [
+            p for p in body_parts if p not in exclude_hands_index
+        ]
+        v2v_no_hand_index = np.concatenate(
+            [part_v2v_all_flat[p] for p in include_parts_no_hand_index]
+        )
+        v2v_no_hand_index_cham = np.concatenate(
+            [part_v2v_all_flat_cham[p] for p in include_parts_no_hand_index]
+        )
+        mean_v2v_no_hand_index = v2v_no_hand_index.mean()
+        mean_v2v_no_hand_index_cham = v2v_no_hand_index_cham.mean()
+
+        # 根据mean_part_v2v为t_body按部位着色
+        # 1. 归一化mean_part_v2v到[0,1]
+        mean_part_v2v_values = np.array([mean_part_v2v[part] for part in body_parts])
+        min_part_v2v = mean_part_v2v_values.min()
+        max_part_v2v = mean_part_v2v_values.max()
+        norm_mean_part_v2v = (mean_part_v2v_values - min_part_v2v) / (
+            max_part_v2v - min_part_v2v + 1e-8
+        )
+
+        # 2. 使用jet colormap映射颜色
+        cmap = plt.get_cmap("jet")
+        part_colors = cmap(norm_mean_part_v2v)[:, :3]  # shape: (24, 3)
+
+        # 3. 为每个顶点分配对应部位的颜色
+        vertex_colors_by_part = np.zeros((6890, 3))
+        for i, part in enumerate(body_parts):
+            idxs = smpl_seg[part]
+            vertex_colors_by_part[idxs] = part_colors[i]
+
+        # 4. 保存带颜色的mesh
+        colored_mesh_by_part = t_body.copy()
+        colored_mesh_by_part.visual.vertex_colors = (
+            vertex_colors_by_part * 255
+        ).astype(np.uint8)
+        colored_mesh_by_part.export(
+            os.path.join(pred_folder, f"{exp_name}_mean_error_by_part.ply")
+        )
+
+        # 同样处理chamfer refine后的结果
+        mean_part_v2v_cham_values = np.array(
+            [mean_part_v2v_cham[part] for part in body_parts]
+        )
+        min_part_v2v_cham = mean_part_v2v_cham_values.min()
+        max_part_v2v_cham = mean_part_v2v_cham_values.max()
+        norm_mean_part_v2v_cham = (mean_part_v2v_cham_values - min_part_v2v_cham) / (
+            max_part_v2v_cham - min_part_v2v_cham + 1e-8
+        )
+
+        part_colors_cham = cmap(norm_mean_part_v2v_cham)[:, :3]
+
+        vertex_colors_by_part_cham = np.zeros((6890, 3))
+        for i, part in enumerate(body_parts):
+            idxs = smpl_seg[part]
+            vertex_colors_by_part_cham[idxs] = part_colors_cham[i]
+
+        colored_mesh_by_part_cham = t_body.copy()
+        colored_mesh_by_part_cham.visual.vertex_colors = (
+            vertex_colors_by_part_cham * 255
+        ).astype(np.uint8)
+        colored_mesh_by_part_cham.export(
+            os.path.join(pred_folder, f"{exp_name}_mean_error_by_part_cham.ply")
+        )
+
+        np.savez(
+            os.path.join(pred_folder, f"{exp_name}_v2v_parts.npz"),
+            part_v2v=part_v2v_all_flat,
+            part_v2v_cham=part_v2v_all_flat_cham,
+            mean_part_v2v=mean_part_v2v,
+            mean_part_v2v_cham=mean_part_v2v_cham,
+            mean_v2v_all=mean_v2v_all,
+            mean_v2v_all_cham=mean_v2v_all_cham,
+            mean_v2v_no_hand=mean_v2v_no_hand,
+            mean_v2v_no_hand_cham=mean_v2v_no_hand_cham,
+            mean_v2v_no_hand_index=mean_v2v_no_hand_index,
+            mean_v2v_no_hand_index_cham=mean_v2v_no_hand_index_cham,
+        )
+
+    if save_error_mesh_mean:
         min_err = all_v2v_map.min()
         max_err = all_v2v_map.max()
         norm_errors = (all_v2v_map - min_err) / (max_err - min_err + 1e-8)
@@ -237,6 +387,61 @@ def main():
         colored_mesh = t_body.copy()
         colored_mesh.visual.vertex_colors = (vertex_colors * 255).astype(np.uint8)
         colored_mesh.export(os.path.join(pred_folder, f"{exp_name}_error_mean.ply"))
+
+        # 去掉hand后的error map
+        exclude_hands = ["leftHand", "rightHand"]
+        include_parts_no_hand = [p for p in body_parts if p not in exclude_hands]
+        all_v2v_map_no_hand = all_v2v_map.copy()
+        for part in exclude_hands:
+            idxs = smpl_seg[part]
+            all_v2v_map_no_hand[idxs] = 0  # 将hand部位的误差设为0
+
+        min_err_no_hand = all_v2v_map_no_hand[all_v2v_map_no_hand > 0].min()
+        max_err_no_hand = all_v2v_map_no_hand.max()
+        norm_errors_no_hand = (all_v2v_map_no_hand - min_err_no_hand) / (
+            max_err_no_hand - min_err_no_hand + 1e-8
+        )
+        vertex_colors_no_hand = cmap(norm_errors_no_hand)[:, :3]
+        colored_mesh_no_hand = t_body.copy()
+        colored_mesh_no_hand.visual.vertex_colors = (
+            vertex_colors_no_hand * 255
+        ).astype(np.uint8)
+        colored_mesh_no_hand.export(
+            os.path.join(pred_folder, f"{exp_name}_error_mean_no_hand.ply")
+        )
+
+        # 去掉hand和index1后的error map
+        exclude_hands_index = [
+            "leftHand",
+            "rightHand",
+            "leftHandIndex1",
+            "rightHandIndex1",
+        ]
+        include_parts_no_hand_index = [
+            p for p in body_parts if p not in exclude_hands_index
+        ]
+        all_v2v_map_no_hand_index = all_v2v_map.copy()
+        for part in exclude_hands_index:
+            idxs = smpl_seg[part]
+            all_v2v_map_no_hand_index[idxs] = 0  # 将hand和index1部位的误差设为0
+
+        min_err_no_hand_index = all_v2v_map_no_hand_index[
+            all_v2v_map_no_hand_index > 0
+        ].min()
+        max_err_no_hand_index = all_v2v_map_no_hand_index.max()
+        norm_errors_no_hand_index = (
+            all_v2v_map_no_hand_index - min_err_no_hand_index
+        ) / (max_err_no_hand_index - min_err_no_hand_index + 1e-8)
+        vertex_colors_no_hand_index = cmap(norm_errors_no_hand_index)[:, :3]
+        colored_mesh_no_hand_index = t_body.copy()
+        colored_mesh_no_hand_index.visual.vertex_colors = (
+            vertex_colors_no_hand_index * 255
+        ).astype(np.uint8)
+        colored_mesh_no_hand_index.export(
+            os.path.join(pred_folder, f"{exp_name}_error_mean_no_hand_index.ply")
+        )
+
+        # chamfer refine后的结果
         min_err_cham = all_v2v_map_cham.min()
         max_err_cham = all_v2v_map_cham.max()
         norm_errors_cham = (all_v2v_map_cham - min_err_cham) / (
@@ -252,9 +457,57 @@ def main():
             os.path.join(pred_folder, f"{exp_name}_error_mean_cham.ply")
         )
 
+        # chamfer refine后去掉hand的error map
+        all_v2v_map_cham_no_hand = all_v2v_map_cham.copy()
+        for part in exclude_hands:
+            idxs = smpl_seg[part]
+            all_v2v_map_cham_no_hand[idxs] = 0
+
+        min_err_cham_no_hand = all_v2v_map_cham_no_hand[
+            all_v2v_map_cham_no_hand > 0
+        ].min()
+        max_err_cham_no_hand = all_v2v_map_cham_no_hand.max()
+        norm_errors_cham_no_hand = (all_v2v_map_cham_no_hand - min_err_cham_no_hand) / (
+            max_err_cham_no_hand - min_err_cham_no_hand + 1e-8
+        )
+        vertex_colors_cham_no_hand = cmap_cham(norm_errors_cham_no_hand)[:, :3]
+        colored_mesh_cham_no_hand = t_body.copy()
+        colored_mesh_cham_no_hand.visual.vertex_colors = (
+            vertex_colors_cham_no_hand * 255
+        ).astype(np.uint8)
+        colored_mesh_cham_no_hand.export(
+            os.path.join(pred_folder, f"{exp_name}_error_mean_cham_no_hand.ply")
+        )
+
+        # chamfer refine后去掉hand和index1的error map
+        all_v2v_map_cham_no_hand_index = all_v2v_map_cham.copy()
+        for part in exclude_hands_index:
+            idxs = smpl_seg[part]
+            all_v2v_map_cham_no_hand_index[idxs] = 0
+
+        min_err_cham_no_hand_index = all_v2v_map_cham_no_hand_index[
+            all_v2v_map_cham_no_hand_index > 0
+        ].min()
+        max_err_cham_no_hand_index = all_v2v_map_cham_no_hand_index.max()
+        norm_errors_cham_no_hand_index = (
+            all_v2v_map_cham_no_hand_index - min_err_cham_no_hand_index
+        ) / (max_err_cham_no_hand_index - min_err_cham_no_hand_index + 1e-8)
+        vertex_colors_cham_no_hand_index = cmap_cham(norm_errors_cham_no_hand_index)[
+            :, :3
+        ]
+        colored_mesh_cham_no_hand_index = t_body.copy()
+        colored_mesh_cham_no_hand_index.visual.vertex_colors = (
+            vertex_colors_cham_no_hand_index * 255
+        ).astype(np.uint8)
+        colored_mesh_cham_no_hand_index.export(
+            os.path.join(pred_folder, f"{exp_name}_error_mean_cham_no_hand_index.ply")
+        )
     print("mean v2v error: ", all_v2v_error / sample_num, "sample num: ", sample_num)
     print(
-        "mean mpjpe error: ", all_mpjpe_error / sample_num, "sample num: ", sample_num
+        "mean mpjpe error: ",
+        all_mpjpe_error / sample_num,
+        "sample num: ",
+        sample_num,
     )
     print(
         "mean v2v error with chamfer refine: ",
@@ -268,68 +521,72 @@ def main():
         "sample num: ",
         sample_num,
     )
-    with open(v2v_file, "a") as f:
-        f.write(
-            f"mean v2v error: {all_v2v_error / sample_num} sample num: {sample_num}\n"
-        )
-    with open(mpjpe_file, "a") as f:
-        f.write(
-            f"mean mpjpe error: {all_mpjpe_error / sample_num} sample num: {sample_num}\n"
-        )
-    with open(v2v_file_cham, "a") as f:
-        f.write(
-            f"mean v2v error with chamfer refine: {all_v2v_error_cham / sample_num} sample num: {sample_num}\n"
-        )
-    with open(mpjpe_file_cham, "a") as f:
-        f.write(
-            f"mean mpjpe error with chamfer refine: {all_mpjpe_error_cham / sample_num} sample num: {sample_num}\n"
-        )
-    if not os.path.isfile(
-        os.path.join(pred_folder, f"v2v_error_{all_v2v_error / sample_num}.txt")
-    ):
-        os.rename(
-            v2v_file,
-            os.path.join(pred_folder, f"v2v_error_{all_v2v_error / sample_num}.txt"),
-        )
-    else:
-        os.remove(v2v_file)
-    if not os.path.isfile(
-        os.path.join(pred_folder, f"mpjpe_error_{all_mpjpe_error / sample_num}.txt")
-    ):
-        os.rename(
-            mpjpe_file,
-            os.path.join(
-                pred_folder, f"mpjpe_error_{all_mpjpe_error / sample_num}.txt"
-            ),
-        )
-    else:
-        os.remove(mpjpe_file)
-    if not os.path.isfile(
-        os.path.join(
-            pred_folder, f"v2v_error_cham_{all_v2v_error_cham / sample_num}.txt"
-        )
-    ):
-        os.rename(
-            v2v_file_cham,
+    if save_log_file:
+        with open(v2v_file, "a") as f:
+            f.write(
+                f"mean v2v error: {all_v2v_error / sample_num} sample num: {sample_num}\n"
+            )
+        with open(mpjpe_file, "a") as f:
+            f.write(
+                f"mean mpjpe error: {all_mpjpe_error / sample_num} sample num: {sample_num}\n"
+            )
+        with open(v2v_file_cham, "a") as f:
+            f.write(
+                f"mean v2v error with chamfer refine: {all_v2v_error_cham / sample_num} sample num: {sample_num}\n"
+            )
+        with open(mpjpe_file_cham, "a") as f:
+            f.write(
+                f"mean mpjpe error with chamfer refine: {all_mpjpe_error_cham / sample_num} sample num: {sample_num}\n"
+            )
+        if not os.path.isfile(
+            os.path.join(pred_folder, f"v2v_error_{all_v2v_error / sample_num}.txt")
+        ):
+            os.rename(
+                v2v_file,
+                os.path.join(
+                    pred_folder, f"v2v_error_{all_v2v_error / sample_num}.txt"
+                ),
+            )
+        else:
+            os.remove(v2v_file)
+        if not os.path.isfile(
+            os.path.join(pred_folder, f"mpjpe_error_{all_mpjpe_error / sample_num}.txt")
+        ):
+            os.rename(
+                mpjpe_file,
+                os.path.join(
+                    pred_folder, f"mpjpe_error_{all_mpjpe_error / sample_num}.txt"
+                ),
+            )
+        else:
+            os.remove(mpjpe_file)
+        if not os.path.isfile(
             os.path.join(
                 pred_folder, f"v2v_error_cham_{all_v2v_error_cham / sample_num}.txt"
-            ),
-        )
-    else:
-        os.remove(v2v_file_cham)
-    if not os.path.isfile(
-        os.path.join(
-            pred_folder, f"mpjpe_error_cham_{all_mpjpe_error_cham / sample_num}.txt"
-        )
-    ):
-        os.rename(
-            mpjpe_file_cham,
+            )
+        ):
+            os.rename(
+                v2v_file_cham,
+                os.path.join(
+                    pred_folder, f"v2v_error_cham_{all_v2v_error_cham / sample_num}.txt"
+                ),
+            )
+        else:
+            os.remove(v2v_file_cham)
+        if not os.path.isfile(
             os.path.join(
                 pred_folder, f"mpjpe_error_cham_{all_mpjpe_error_cham / sample_num}.txt"
-            ),
-        )
-    else:
-        os.remove(mpjpe_file_cham)
+            )
+        ):
+            os.rename(
+                mpjpe_file_cham,
+                os.path.join(
+                    pred_folder,
+                    f"mpjpe_error_cham_{all_mpjpe_error_cham / sample_num}.txt",
+                ),
+            )
+        else:
+            os.remove(mpjpe_file_cham)
     if log_tensorboard:
         writer.add_scalar("mean_v2v_error", all_v2v_error / sample_num, 0)
         writer.add_scalar("mean_mpjpe_error", all_mpjpe_error / sample_num, 0)

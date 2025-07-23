@@ -7,6 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 import matplotlib.pyplot as plt
 from smplx import SMPL
+import json
 
 
 # CAPE without chamfer refinement
@@ -28,14 +29,13 @@ def main():
     t_body = trimesh.Trimesh(
         vertices=t_body.vertices.detach().cpu().numpy()[0], faces=SMPL_model.faces
     )
-    import json
 
     with open("src/lvd_templ/evaluation/smpl_vert_segmentation.json", "r") as f:
         smpl_seg = json.load(f)
     body_parts = list(smpl_seg.keys())  # 24个部位
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_name = "cape_pred_inner_points"
+    exp_name = "cape_hitpts"
     log_tensorboard = False
     if log_tensorboard:
         tensorboard_name = f"{timestamp}_{exp_name}"
@@ -142,8 +142,8 @@ def main():
         gt_smpl_mesh.vertices = gt_smpl_vertices
         gt_scan_mesh.vertices = gt_scan_vertices
 
-        gt_smpl_mesh.export(os.path.join(pred_folder, "vis", name, "gt_smpl.ply"))
-        gt_scan_mesh.export(os.path.join(pred_folder, "vis", name, "gt_scan.ply"))
+        # gt_smpl_mesh.export(os.path.join(pred_folder, "vis", name, "gt_smpl.ply"))
+        # gt_scan_mesh.export(os.path.join(pred_folder, "vis", name, "gt_scan.ply"))
 
         gt_smpl_verts = np.asarray(gt_smpl_mesh.vertices)
         pred_smpl_verts = np.asarray(pred_smpl_mesh.vertices)
@@ -503,6 +503,17 @@ def main():
         colored_mesh_cham_no_hand_index.export(
             os.path.join(pred_folder, f"{exp_name}_error_mean_cham_no_hand_index.ply")
         )
+        # # 在循环结束后添加验证
+        # print("=== 验证两种计算方式 ===")
+        # print(f"方式1 - mean_v2v_all: {mean_v2v_all}")
+        # print(f"方式2 - all_v2v_error/sample_num: {all_v2v_error / sample_num}")
+        # print(f"差异: {abs(mean_v2v_all - all_v2v_error / sample_num)}")
+
+        # # 验证顶点数量
+        # total_vertices_way1 = sum(len(part_v2v_all_flat[part]) for part in body_parts)
+        # total_vertices_way2 = sample_num * 6890
+        # print(f"方式1顶点总数: {total_vertices_way1}")
+        # print(f"方式2顶点总数: {total_vertices_way2}")
 
     # print(sample_num)
     print("mean v2v error: ", all_v2v_error / sample_num, "sample num: ", sample_num)
