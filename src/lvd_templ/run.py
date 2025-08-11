@@ -12,17 +12,16 @@ from nn_core.common import PROJECT_ROOT
 from nn_core.common.utils import enforce_tags, seed_index_everything
 from nn_core.model_logging import NNLogger
 from nn_core.serialization import NNCheckpointIO
-
+import sys
+sys.path.append("/home/lixiaoben/projects/NICP/src")
 from lvd_templ.data.datamodule_AMASS import MetaData
 
 #######
 
 pylogger = logging.getLogger(__name__)
 import torch
-import wandb
+# import wandb
 import os
-
-os.environ["WANDB_MODE"] = "offline"
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
@@ -51,7 +50,7 @@ def build_callbacks(cfg: ListConfig, *args: Callback) -> List[Callback]:
 
 def run(cfg: DictConfig) -> str:
     """Generic train loop."""
-    wandb.init(project="test", mode="offline")
+    # wandb.init(project="test", mode="offline")
     seed_index_everything(cfg.train)
 
     # Tag to identify the run?
@@ -117,7 +116,7 @@ def run(cfg: DictConfig) -> str:
     return logger.run_dir
 
 
-PROJECT_ROOT = Path("/home/lixiaoben/projects/NICP/training")
+PROJECT_ROOT = Path("/home/lixiaoben/projects/NICP")
 
 
 @hydra.main(config_path=str(PROJECT_ROOT / "conf_ifnet"), config_name="default")

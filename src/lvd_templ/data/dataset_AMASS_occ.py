@@ -139,6 +139,7 @@ class AMASSDataset(Dataset):
             self.idxs = np.squeeze(
                 kdt.query(np.asarray(p.vertices), k=1, return_distance=False)
             )  # Store the idxs
+            # print(self.idxs.shape)
             # np.save('idxs_' + str(self.factor), self.idxs)                                          # Save it locally to guarantee reproducibility
             self.red_templ = self.template[:, self.idxs]  # Save our reduced template
 
@@ -170,7 +171,7 @@ class AMASSDataset(Dataset):
                 "verts_" + str(self.type),
                 str(f"{int(idx):09}"),
             )
-            + ".pt"
+            + ".pt", weights_only=True
         )
 
         # Load the voxelization

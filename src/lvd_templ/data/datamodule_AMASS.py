@@ -12,7 +12,7 @@ from torch.utils.data.dataloader import default_collate
 
 #from nn_core.common import PROJECT_ROOT
 from pathlib import Path
-from lvd_templ.paths import neutral_smpl_path, home_dir
+from lvd_templ.paths import neutral_smplx_path, home_dir
 from nn_core.nn_types import Split
 
 ## CHANGE PATH TO THE CURRENT FOLDER
