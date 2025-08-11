@@ -115,7 +115,7 @@ def run(cfg: DictConfig) -> str:
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"4d-dress_gen_eq_{input_type}"
+    out_dir = out_folder + model_name + "/" + f"4d-dress_{input_type}_new"
 
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
@@ -123,7 +123,7 @@ def run(cfg: DictConfig) -> str:
     # Recover Data Path
     # path_in = get_dataset(cfg['core'].challenge)
     # path_in = '/home/boqian/code/NICP/datafolder/4D-DRESS/data_processed/model'
-    path_in = "/home/lixiaoben/projects/NICP/datafolder/4D-DRESS/4d-dress_gen_eq_epoch_13_test"
+    path_in = "/home/lixiaoben/projects/NICP/datafolder/4D-DRESS/eval_outputs/4d-dress_epoch_20_test"
     path_info = "/home/lixiaoben/projects/NICP/datafolder/4D-DRESS/data_processed/smplh"
 
     assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
