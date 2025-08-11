@@ -20,6 +20,9 @@ from lvd_templ.data.datamodule_AMASS import MetaData
 pylogger = logging.getLogger(__name__)
 import torch
 import wandb
+import os
+
+os.environ["WANDB_MODE"] = "offline"
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
@@ -48,7 +51,7 @@ def build_callbacks(cfg: ListConfig, *args: Callback) -> List[Callback]:
 
 def run(cfg: DictConfig) -> str:
     """Generic train loop."""
-
+    wandb.init(project="test", mode="offline")
     seed_index_everything(cfg.train)
 
     # Tag to identify the run?
