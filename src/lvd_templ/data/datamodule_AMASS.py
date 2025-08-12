@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset, random_split
 from torch.utils.data.dataloader import default_collate
 
-#from nn_core.common import PROJECT_ROOT
+# from nn_core.common import PROJECT_ROOT
 from pathlib import Path
 from lvd_templ.paths import neutral_smplx_path, home_dir
 from nn_core.nn_types import Split
@@ -19,6 +19,7 @@ from nn_core.nn_types import Split
 PROJECT_ROOT = Path(home_dir)
 
 pylogger = logging.getLogger(__name__)
+
 
 class MetaData:
     def __init__(self, class_vocab: Mapping[str, int]):
@@ -82,7 +83,9 @@ class MyDataModule(pl.LightningDataModule):
 
         #################################################
         # Here you should instantiate your datasets, you may also split the train into train and validation if needed.
-        if (stage is None or stage == "fit") and (self.train_dataset is None and self.val_datasets is None):
+        if (stage is None or stage == "fit") and (
+            self.train_dataset is None and self.val_datasets is None
+        ):
             # Instantiate training dataset
             train_data = hydra.utils.instantiate(self.datasets.train, mode="train")
 
@@ -104,7 +107,6 @@ class MyDataModule(pl.LightningDataModule):
                 test_data = hydra.utils.instantiate(self.datasets.train, mode="test")
                 self.test_datasets = test_data
 
-        
         #################################################
 
     def train_dataloader(self) -> DataLoader:
@@ -143,17 +145,28 @@ class MyDataModule(pl.LightningDataModule):
         )
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(" f"{self.datasets=}, " f"{self.num_workers=}, " f"{self.batch_size=})"
+        return (
+            f"{self.__class__.__name__}("
+            f"{self.datasets=}, "
+            f"{self.num_workers=}, "
+            f"{self.batch_size=})"
+        )
 
 
-@hydra.main(config_path=str(PROJECT_ROOT / "conf_ifnet"), config_name="default")
+@hydra.main(
+    version_base="1.2",
+    config_path=str(PROJECT_ROOT / "conf_ifnet"),
+    config_name="default",
+)
 def main(cfg: omegaconf.DictConfig) -> None:
     """Debug main to quickly develop the DataModule.
 
     Args:
         cfg: the hydra configuration
     """
-    _: pl.LightningDataModule = hydra.utils.instantiate(cfg.data.datamodule, _recursive_=False)
+    _: pl.LightningDataModule = hydra.utils.instantiate(
+        cfg.data.datamodule, _recursive_=False
+    )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # metadata specialised for each experiment
 core:
   checkpoint: matchAMASS_4D-DRESS
-  tag: 'tag_4d-dress'
+  tag: '4d-dress'
   challenge: demo
   cham_ref: True
   cham_bidir: 0

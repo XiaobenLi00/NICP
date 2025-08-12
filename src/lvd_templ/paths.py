@@ -10,7 +10,7 @@ path_challenge_pairs = "./src/lvd_templ/evaluation/train_challenge.txt"
 
 
 ##########
-# neutral_smpl_path                 = './support_data/body_models/smplh/neutral/model.npz'
+neutral_smpl_path = "./support_data/body_models/smplh/neutral/model.npz"
 neutral_smplx_path = "./support_data/body_models/smplx/SMPLX_NEUTRAL.npz"
 
 output_dir = "./output/"

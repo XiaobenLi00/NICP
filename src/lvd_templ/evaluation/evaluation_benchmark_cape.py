@@ -306,7 +306,7 @@ def run(cfg: DictConfig) -> str:
                     np.asarray(mesh_src.vertices[picker]), dtype=torch.float32
                 ),
                 0,
-            )
+            ).cuda()
         else:
             init = torch.zeros(1, gt_points, 3).cuda()
 

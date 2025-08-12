@@ -22,7 +22,7 @@ from torch.utils.data import Dataset
 from nn_core.common import PROJECT_ROOT
 from nn_core.nn_types import Split
 from human_body_prior.body_model.body_model import BodyModel
-from lvd_templ.paths import neutral_smplx_path
+from lvd_templ.paths import neutral_smplx_path, neutral_smpl_path
 
 ################
 
@@ -31,7 +31,8 @@ from lvd_templ.paths import neutral_smplx_path
 ################
 
 # PATH TO NEUTRAL SMPL MODEL
-bm_fname = neutral_smplx_path
+# bm_fname = neutral_smplx_path
+bm_fname = neutral_smpl_path
 
 num_betas = 16  # number of body parameters
 num_dmpls = 8  # number of DMPL parameters
@@ -171,7 +172,8 @@ class AMASSDataset(Dataset):
                 "verts_" + str(self.type),
                 str(f"{int(idx):09}"),
             )
-            + ".pt", weights_only=True
+            + ".pt",
+            weights_only=True,
         )
 
         # Load the voxelization

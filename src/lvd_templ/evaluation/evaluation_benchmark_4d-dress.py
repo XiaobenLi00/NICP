@@ -15,6 +15,7 @@ import pickle
 import sys
 
 sys.path.append("/home/lixiaoben/projects/NICP")
+sys.path.append("/home/lixiaoben/projects/NICP/src")
 from utils_cop.prior import MaxMixturePrior
 
 # from utils_cop.SMPL import SMPL
@@ -41,6 +42,7 @@ from lvd_templ.evaluation.utils import (
     fit_cham,
     fit_plus_D,
 )
+from lvd_templ.evaluation.fit_SMPL import fit_smpl
 
 import warnings
 
@@ -76,6 +78,8 @@ def export_mesh(T, r, t, s, path):
 def get_model(chk):
     # Recovering the Path to the checkpoint
     chk_zip = glob.glob(chk + "checkpoints/*.zip")[0]
+    chk_zip = "./storage/matchAMASS_4D-DRESS/checkpoints/epoch=54-step=408374.ckpt.zip"
+
     print(f"loading model ckpt: {chk_zip}")
 
     # Restoring the network configurations using the Hydra Settings
@@ -84,6 +88,13 @@ def get_model(chk):
     cfg_model = compose(config_name="config")
 
     # Recovering the metadata
+    # print(cfg_model.nn.data.datasets.train)
+    cfg_model.nn.data.datasets.train["train_ids"] = (
+        "datafolder_new/useful_data_4d-dress/train_ids.pkl"
+    )
+    cfg_model.nn.data.datasets.train["val_ids"] = (
+        "datafolder_new/useful_data_4d-dress/val_ids_sampled_ratio10.pkl"
+    )
     train_data = hydra.utils.instantiate(cfg_model.nn.data.datasets.train, mode="test")
     MD = MetaData(class_vocab=train_data.class_vocab)
 
@@ -115,7 +126,7 @@ def run(cfg: DictConfig) -> str:
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"4d-dress_{input_type}_new"
+    out_dir = out_folder + model_name + "/" + f"4d-dress_{input_type}_54_new_fit"
 
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
@@ -137,7 +148,7 @@ def run(cfg: DictConfig) -> str:
     scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
     scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
     scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part4
+    scans = scans_part1
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")
@@ -308,12 +319,19 @@ def run(cfg: DictConfig) -> str:
         reg_src = transformations.transform_points(reg_src, inv_Rx)
 
         # FIT SMPL Model to the LVD Prediction
-        out_s, params = SMPL_fitting(
-            SMPL_model, reg_src, gt_idxs, prior, iterations=2000
-        )
+        # print(reg_src.shape)
+        # print(gt_idxs.shape)
+        # exit()
+        # out_s, params = SMPL_fitting(
+        #     SMPL_model, reg_src, gt_idxs, prior, iterations=2000
+        # )
+        out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
-            params_np[p] = params[p].detach().cpu().numpy()
+            if isinstance(params[p], torch.Tensor):
+                params_np[p] = params[p].detach().cpu().numpy()
+            else:
+                params_np[p] = params[p]
 
         np.savez(
             out_dir + "/" + name + "/pred_smpl_info_before_cham_refine.npz",
