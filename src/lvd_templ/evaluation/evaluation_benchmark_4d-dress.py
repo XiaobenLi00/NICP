@@ -148,7 +148,7 @@ def run(cfg: DictConfig) -> str:
     scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
     scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
     scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part1
+    scans = scans_part4
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")

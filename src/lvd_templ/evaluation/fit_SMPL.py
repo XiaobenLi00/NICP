@@ -26,11 +26,20 @@ def fit_smpl(
     lr_stage0=5e-1,
     lr_stage1=2e-1,
 ):
+    print("Start fitting SMPL")
+    # in_points = in_points[::10]  # (69, 3)
+    # gt_idxs = gt_idxs[::10]  # (69,)
+    # print(in_points.shape)
+    # print(gt_idxs)
+    # print(len(gt_idxs))
 
     B = 1
-    pred_markers_position = torch.from_numpy(in_points).to(
-        torch.device("cuda"), dtype=torch.float32
-    )
+    pred_markers_position = (
+        torch.from_numpy(in_points)
+        .to(torch.device("cuda"), dtype=torch.float32)
+        .unsqueeze(0)
+    )  # (1, 69, 3)
+    # print(pred_markers_position.shape)
     loss_weights = {
         "marker_loss": 1.0,
         # "mean_shape_loss": 1e-2 * 10 ** 0,
@@ -155,7 +164,7 @@ def fit_smpl(
     # monitor_memory()
 
     updated_inputs, _ = theseus_layer.forward(
-        theseus_inputs, optimizer_kwargs={"verbose": True, "damping": 0.01}
+        theseus_inputs, optimizer_kwargs={"verbose": False, "damping": 0.01}
     )  # TODO: damping = ??
 
     pose = updated_inputs["pose"]
@@ -206,7 +215,7 @@ def fit_smpl(
     }
 
     updated_inputs, _ = theseus_layer.forward(
-        theseus_inputs, optimizer_kwargs={"verbose": True}
+        theseus_inputs, optimizer_kwargs={"verbose": False}
     )  # TODO: damping = ??
 
     pose = updated_inputs["pose"]
@@ -234,21 +243,22 @@ def fit_smpl(
         )
         final_mesh_list.append(final_smpl_mesh)
 
-    output_smpl_info = [
-        pose.detach().cpu().numpy().reshape(B, 23, 3),
-        shape.detach().cpu().numpy(),
-        global_orient.detach().cpu().numpy(),
-        translation.detach().cpu().numpy(),
-        joints.detach().cpu().numpy(),
-    ]
+    # output_smpl_info = [
+    #     pose.detach().cpu().numpy().reshape(B, 23, 3),
+    #     shape.detach().cpu().numpy(),
+    #     global_orient.detach().cpu().numpy(),
+    #     translation.detach().cpu().numpy(),
+    #     joints.detach().cpu().numpy(),
+    # ]
+
     output_smpl_info = {}
-    output_smpl_info["pose"] = (
-        torch.cat([global_orient, pose], dim=1).detach().cpu().numpy()
+    output_smpl_info["pose"] = torch.nn.Parameter(
+        torch.cat([global_orient, pose], dim=1)
     )
-    output_smpl_info["beta"] = shape.detach().cpu().numpy()
+    output_smpl_info["beta"] = torch.nn.Parameter(shape)
     # output_smpl_info["global_orient"] = global_orient.detach().cpu().numpy()
-    output_smpl_info["trans"] = translation.detach().cpu().numpy()
-    output_smpl_info["joints"] = joints.detach().cpu().numpy()
+    output_smpl_info["trans"] = torch.nn.Parameter(translation)
+    output_smpl_info["joints"] = joints
     # shape(B, 23, 3), shape(B, 10), shape(B, 3), shape(B, 3), shape(B, 45, 3)
 
     return (
