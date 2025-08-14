@@ -31,8 +31,8 @@ from lvd_templ.paths import neutral_smplx_path, neutral_smpl_path
 ################
 
 # PATH TO NEUTRAL SMPL MODEL
-# bm_fname = neutral_smplx_path
-bm_fname = neutral_smpl_path
+bm_fname = neutral_smplx_path
+# bm_fname = neutral_smpl_path
 
 num_betas = 16  # number of body parameters
 num_dmpls = 8  # number of DMPL parameters
@@ -121,12 +121,15 @@ class AMASSDataset(Dataset):
 
         # If not set -> keep original resolution
         if self.factor == 1 and self.n_points == 0:
-            self.idxs = np.arange(0, 6890)
+            # self.idxs = np.arange(0, 6890)
+            self.idxs = np.arange(0, 10475)
 
         # If factor is not set but n_points yes, use random n_points
         elif self.factor == 1:
             self.idxs = random.sample(
-                range(0, 6890), self.n_points
+                # range(0, 6890), self.n_points
+                range(0, 10475),
+                self.n_points,
             )  # TODO: proper SAMPLING
         else:
 
@@ -194,7 +197,8 @@ class AMASSDataset(Dataset):
         rand_uniform = np.random.uniform(b_min, b_max, (self.n_uniform, 3))
 
         # Sample random points near the SMPL surface
-        smpl_inds = np.arange(6890)
+        # smpl_inds = np.arange(6890)
+        smpl_inds = np.arange(10475)
         np.random.shuffle(smpl_inds)
         smpl_inds = smpl_inds[: self.n_fine_sampled]
         noise_smpl = np.random.normal(0, self.fine_std, (self.n_fine_sampled, 3))
@@ -244,7 +248,8 @@ class AMASSDataset(Dataset):
         np.random.seed(base_seed + worker_id)
 
     def new_idxs(self):
-        self.idxs = random.sample(range(0, 6890), self.n_points)
+        # self.idxs = random.sample(range(0, 6890), self.n_points)
+        self.idxs = random.sample(range(0, 10475), self.n_points)
         return
 
 

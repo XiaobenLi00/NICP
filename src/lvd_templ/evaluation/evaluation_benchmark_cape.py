@@ -15,10 +15,12 @@ import pickle
 import sys
 
 sys.path.append("/home/lixiaoben/projects/NICP")
+sys.path.append("/home/lixiaoben/projects/NICP/src")
 from utils_cop.prior import MaxMixturePrior
 
 # from utils_cop.SMPL import SMPL
 from smplx import SMPL
+from trimesh import transformations
 
 
 from nn_core.common import PROJECT_ROOT
@@ -40,9 +42,9 @@ from lvd_templ.evaluation.utils import (
     fit_cham,
     fit_plus_D,
 )
+from lvd_templ.evaluation.fit_SMPL import fit_smpl
 
 import warnings
-from trimesh import transformations
 
 warnings.filterwarnings("ignore")
 
@@ -76,6 +78,8 @@ def export_mesh(T, r, t, s, path):
 def get_model(chk):
     # Recovering the Path to the checkpoint
     chk_zip = glob.glob(chk + "checkpoints/*.zip")[0]
+    chk_zip = "./storage/matchAMASS_CAPE/checkpoints/epoch=57-step=188557.ckpt.zip"
+
     print(f"loading model ckpt: {chk_zip}")
 
     # Restoring the network configurations using the Hydra Settings
@@ -84,6 +88,12 @@ def get_model(chk):
     cfg_model = compose(config_name="config")
 
     # Recovering the metadata
+    cfg_model.nn.data.datasets.train["train_ids"] = (
+        "datafolder_new/useful_data_cape/train_ids.pkl"
+    )
+    cfg_model.nn.data.datasets.train["val_ids"] = (
+        "datafolder_new/useful_data_cape/val_ids.pkl"
+    )
     train_data = hydra.utils.instantiate(cfg_model.nn.data.datasets.train, mode="test")
     MD = MetaData(class_vocab=train_data.class_vocab)
 
@@ -118,12 +128,14 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"cape_eq_{input_type}"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_57"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
+    if not (os.path.exists(out_dir + "/vis")):
+        os.mkdir(out_dir + "/vis")
 
-    path_in = "/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/cape_eq_epoch_34_test"
-    path_info = "/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/smpl_reorganized"
+    path_in = "datafolder/CAPE_reorganized/cape_release/eval_outputs/cape_epoch_32_test"
+    path_info = "datafolder/CAPE_reorganized/cape_release/smpl_reorganized"
     assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
 
     # Recover Data Path
@@ -216,7 +228,7 @@ def run(cfg: DictConfig) -> str:
         print(f"Start :{scan}")
 
         # Basic Name --> You can add "tag" if you want to differentiate the runs
-        out_name = "out" + cfg["core"].tag
+        out_name = cfg["core"].tag
 
         # Scans name format
         # if(cfg['core'].challenge == 'demo'):
@@ -267,8 +279,8 @@ def run(cfg: DictConfig) -> str:
         )
 
         # Save algined mesh
-        if not (os.path.exists(out_dir + "/" + name)):
-            os.mkdir(out_dir + "/" + name)
+        if not (os.path.exists(out_dir + "/vis/" + name)):
+            os.mkdir(out_dir + "/vis/" + name)
 
         if not (cfg["core"].scaleback):
             trasl = trasl * 0
@@ -276,7 +288,11 @@ def run(cfg: DictConfig) -> str:
             inv_Rx = np.eye(4)
 
         export_mesh(
-            mesh_src.copy(), inv_Rx, trasl, scale, out_dir + "/" + name + "/aligned.ply"
+            mesh_src.copy(),
+            inv_Rx,
+            trasl,
+            scale,
+            out_dir + "/vis/" + name + "/aligned.ply",
         )
         # k = mesh_src.export(out_dir +'/'+ name + '/aligned.ply')
 
@@ -323,12 +339,13 @@ def run(cfg: DictConfig) -> str:
         out_s, params = SMPL_fitting(
             SMPL_model, reg_src, gt_idxs, prior, iterations=2000
         )
+        # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
             params_np[p] = params[p].detach().cpu().numpy()
 
         np.savez(
-            out_dir + "/" + name + "/pred_smpl_info_before_cham_refine.npz",
+            out_dir + "/vis/" + name + "/pred_smpl_info_before_cham_refine.npz",
             pose=params_np["pose"][:, 3:].reshape(23, 3),
             betas=params_np["beta"].reshape(10),
             global_orient=params_np["pose"][:, :3].reshape(3),
@@ -340,7 +357,7 @@ def run(cfg: DictConfig) -> str:
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=SMPL_model.faces)
-        T.export(out_dir + "/" + name + "/" + out_name + ".ply")
+        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
         # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
@@ -373,7 +390,7 @@ def run(cfg: DictConfig) -> str:
                 params_np[p] = params[p].detach().cpu().numpy()
 
             np.savez(
-                out_dir + "/" + name + "/pred_smpl_info_after_cham_refine.npz",
+                out_dir + "/vis/" + name + "/pred_smpl_info_after_cham_refine.npz",
                 pose=params_np["pose"][:, 3:].reshape(23, 3),
                 betas=params_np["beta"].reshape(10),
                 global_orient=params_np["pose"][:, :3].reshape(3),
@@ -384,7 +401,7 @@ def run(cfg: DictConfig) -> str:
             # Save Output
             T = trimesh.Trimesh(vertices=out_cham_s, faces=SMPL_model.faces)
             # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
-            T.export(out_dir + "/" + name + "/" + out_name + ".ply")
+            T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
 
             # DEBUG: Save some params of the fitting to check quality of the registration
             # for p in params.keys():

@@ -266,8 +266,8 @@ def run(cfg: DictConfig) -> str:
         )
 
         # Save algined mesh
-        if not (os.path.exists(out_dir + "/" + name)):
-            os.mkdir(out_dir + "/" + name)
+        if not (os.path.exists(out_dir + "/vis/" + name)):
+            os.mkdir(out_dir + "/vis/" + name)
 
         if not (cfg["core"].scaleback):
             trasl = trasl * 0
@@ -275,7 +275,11 @@ def run(cfg: DictConfig) -> str:
             inv_Rx = np.eye(4)
 
         export_mesh(
-            mesh_src.copy(), inv_Rx, trasl, scale, out_dir + "/" + name + "/aligned.ply"
+            mesh_src.copy(),
+            inv_Rx,
+            trasl,
+            scale,
+            out_dir + "/vis/" + name + "/aligned.ply",
         )
         # k = mesh_src.export(out_dir +'/'+ name + '/aligned.ply')
 
@@ -334,7 +338,7 @@ def run(cfg: DictConfig) -> str:
                 params_np[p] = params[p]
 
         np.savez(
-            out_dir + "/" + name + "/pred_smpl_info_before_cham_refine.npz",
+            out_dir + "/vis/" + name + "/pred_smpl_info_before_cham_refine.npz",
             pose=params_np["pose"][:, 3:].reshape(23, 3),
             betas=params_np["beta"].reshape(10),
             global_orient=params_np["pose"][:, :3].reshape(3),
@@ -346,7 +350,7 @@ def run(cfg: DictConfig) -> str:
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=SMPL_model.faces)
-        T.export(out_dir + "/" + name + "/" + out_name + ".ply")
+        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
         # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
@@ -380,7 +384,7 @@ def run(cfg: DictConfig) -> str:
                 params_np[p] = params[p].detach().cpu().numpy()
 
             np.savez(
-                out_dir + "/" + name + "/pred_smpl_info_after_cham_refine.npz",
+                out_dir + "/vis/" + name + "/pred_smpl_info_after_cham_refine.npz",
                 pose=params_np["pose"][:, 3:].reshape(23, 3),
                 betas=params_np["beta"].reshape(10),
                 global_orient=params_np["pose"][:, :3].reshape(3),
@@ -391,7 +395,7 @@ def run(cfg: DictConfig) -> str:
             # Save Output
             T = trimesh.Trimesh(vertices=out_cham_s, faces=SMPL_model.faces)
             # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
-            T.export(out_dir + "/" + name + "/" + out_name + ".ply")
+            T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
 
             # DEBUG: Save some params of the fitting to check quality of the registration
             # for p in params.keys():
