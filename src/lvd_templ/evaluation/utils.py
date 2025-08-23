@@ -32,6 +32,20 @@ class OptimizationSMPL(torch.nn.Module):
         return self.pose, self.beta, self.trans
 
 
+class OptimizationSMPLX(torch.nn.Module):
+    def __init__(self):
+        super(OptimizationSMPLX, self).__init__()
+
+        self.pose = torch.nn.Parameter(torch.zeros(1, 165).cuda())
+        self.beta = torch.nn.Parameter((torch.zeros(1, 10).cuda()))
+        self.trans = torch.nn.Parameter(torch.zeros(1, 3).cuda())
+        self.expression = torch.nn.Parameter(torch.zeros(1, 10).cuda())
+        # self.scale = torch.nn.Parameter(torch.ones(1).cuda()*1)
+
+    def forward(self):
+        return self.pose, self.beta, self.trans, self.expression
+
+
 from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.loss.chamfer import (
     _validate_chamfer_reduction_inputs,
@@ -439,6 +453,105 @@ def SMPL_fitting(SMPL_model, in_points, gt_idxs, prior, iterations=1000):
     return fit_mesh, params
 
 
+def SMPLX_fitting(SMPLX_model, in_points, gt_idxs, prior, iterations=1000):
+    """
+    Args:
+        SMPL_model: SMPL model
+        in_points: input points ((1051, 3) for SMPLX)
+        gt_idxs: ground truth indices ((1051) for SMPLX)
+        prior: prior (gmm)
+        iterations: number of iterations
+    Returns:
+    """
+    # Hyperparameters
+    factor_beta_reg = 0.01
+    # factor_pose_reg = 0.00000001
+    factor_expression_reg = 0.01
+    lr = 1e-1
+    lr_eps = 1e-5
+
+    # Setup the optimization
+    parameters_smplx = OptimizationSMPLX().cuda()
+    optimizer_smplx = torch.optim.Adam(parameters_smplx.parameters())
+    pred_mesh_torch = torch.FloatTensor(in_points).cuda()
+
+    # SMPL FITTING
+    for i in tqdm.tqdm(range(iterations), desc="FIT SMPL TO NF PREDICTION"):
+        # Forward pass
+        pose, beta, trans, expression = parameters_smplx.forward()
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_verts=True,
+        ).vertices[0]
+        distances = torch.abs(pred_mesh_torch - vertices_smplx[gt_idxs])
+
+        # Get Losses
+        loss = distances.mean()
+        # prior_loss = prior.forward(pose[:, 3:], None)
+        beta_loss = (beta**2).mean()
+        expression_loss = (expression**2).mean()
+        # loss = loss + prior_loss * factor_pose_reg + beta_loss * factor_beta_reg
+        loss = (
+            loss + beta_loss * factor_beta_reg + expression_loss * factor_expression_reg
+        )
+
+        # Optimization
+        optimizer_smplx.zero_grad()
+        loss.backward()
+        optimizer_smplx.step()
+        for param_group in optimizer_smplx.param_groups:
+            param_group["lr"] = lr * (iterations - i) / iterations + lr_eps
+
+    # Obtain model and parameter
+    with torch.no_grad():
+        pose, beta, trans, expression = parameters_smplx.forward()
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_verts=True,
+        ).vertices[0]
+        joints = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_joints=True,
+        ).joints[0]
+        fit_mesh = vertices_smplx.cpu().data.numpy()
+        params = {}
+        params["loss"] = loss.detach()
+        params["beta"] = beta
+        params["pose"] = pose
+        params["trans"] = trans
+        params["joints"] = joints
+        params["expression"] = expression
+
+    return fit_mesh, params
+
+
 # def get_chamfer_dist(ref_vertices, points):
 #     step = 100
 #     iters = len(points)//step
@@ -596,6 +709,129 @@ def fit_cham(SMPL_model, pred_mesh, vertices_scan, prior, init, bidir=0):
         params["pose"] = pose
         params["trans"] = trans
         params["joints"] = joints
+    return pred_mesh3, params
+
+
+def fit_cham_smplx(SMPLX_model, pred_mesh, vertices_scan, prior, init, bidir=0):
+    chamferDist = ChamferDistance()
+    parameters_smplx = OptimizationSMPLX().cuda()
+    parameters_smplx.pose = init["pose"]
+    parameters_smplx.beta = init["beta"]
+    parameters_smplx.trans = init["trans"]
+    parameters_smplx.expression = init["expression"]
+
+    lr = 2e-2
+
+    optimizer_smplx = torch.optim.Adam(parameters_smplx.parameters(), lr=lr)
+    iterations = 500
+    ind_verts = np.arange(10475)
+    # pred_mesh_torch = torch.FloatTensor(pred_mesh).cuda()
+
+    factor_beta_reg = 0.2
+    factor_expression_reg = 0.2
+
+    for i in tqdm.tqdm(range(iterations), desc="Chamfer"):
+        pose, beta, trans, expression = parameters_smplx.forward()
+        # beta = beta*3
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+        ).vertices[0]
+        # distances = torch.abs(pred_mesh_torch - vertices_smpl)
+
+        if bidir == 0:
+            d1 = torch.sqrt(
+                chamferDist(
+                    torch.FloatTensor(vertices_scan).cuda().unsqueeze(0),
+                    vertices_smplx.unsqueeze(0),
+                    False,
+                )
+            ).mean()
+            d2 = torch.sqrt(
+                chamferDist(
+                    vertices_smplx.unsqueeze(0),
+                    torch.FloatTensor(vertices_scan).cuda().unsqueeze(0),
+                    False,
+                )
+            ).mean()
+
+            loss = d1 + d2
+        elif bidir == 1:  ## Partial
+            loss = torch.sqrt(
+                chamferDist(
+                    torch.FloatTensor(vertices_scan).cuda().unsqueeze(0),
+                    vertices_smplx.unsqueeze(0),
+                    False,
+                )
+            ).mean()
+        elif bidir == -1:  ##Clutter
+            loss = torch.sqrt(
+                chamferDist(
+                    vertices_smplx.unsqueeze(0),
+                    torch.FloatTensor(vertices_scan).cuda().unsqueeze(0),
+                    False,
+                )
+            ).mean()
+
+        # prior_loss = prior.forward(pose[:, 3:], beta)
+        beta_loss = (beta**2).mean()
+        expression_loss = (expression**2).mean()
+        loss = (
+            loss + beta_loss * factor_beta_reg + expression_loss * factor_expression_reg
+        )
+
+        optimizer_smplx.zero_grad()
+        loss.backward()
+        optimizer_smplx.step()
+
+        for param_group in optimizer_smplx.param_groups:
+            param_group["lr"] = lr * (iterations - i) / iterations
+
+    with torch.no_grad():
+        pose, beta, trans, expression = parameters_smplx.forward()
+        # beta = beta*3
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_verts=True,
+        ).vertices[0]
+        pred_mesh3 = vertices_smplx.cpu().data.numpy()
+        joints = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_joints=True,
+        ).joints[0]
+        params = {}
+        params["loss"] = loss
+        params["beta"] = beta
+        params["pose"] = pose
+        params["trans"] = trans
+        params["joints"] = joints
+        params["expression"] = expression
     return pred_mesh3, params
 
 

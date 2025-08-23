@@ -15,7 +15,7 @@ def main():
 
     gt_smpl_folder = "datafolder/CAPE_reorganized/cape_release/smpl_reorganized"
     gt_scan_folder = "datafolder/CAPE_reorganized/cape_release/model_reorganized"
-    pred_folder = "output/matchAMASS_CAPE/cape_raw_nicp_20000"
+    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_57_new_fit"
 
     # gt_smpl_folder = "datafolder/4D-DRESS/data_processed/smplh"
     # pred_folder = "/home/boqian/code/NICP/output/matchAMASS_4D-DRESS/demo"
@@ -37,11 +37,11 @@ def main():
         os.remove(v2v_file_cham)
     if os.path.isfile(mpjpe_file_cham):
         os.remove(mpjpe_file_cham)
-    for name in tqdm(os.listdir(pred_folder)):
+    for name in tqdm(os.listdir(os.path.join(pred_folder, "vis"))):
 
         # v2v
-        pred_smpl_path = os.path.join(pred_folder, name, "outcape_ss.ply")
-        pred_smpl_cham_path = os.path.join(pred_folder, name, "outcape_ss_cham_0.ply")
+        pred_smpl_path = os.path.join(pred_folder, "vis", name, "cape_ss.ply")
+        pred_smpl_cham_path = os.path.join(pred_folder, "vis", name, "cape_ss_cham.ply")
         # assert os.path.isfile(pred_smpl_path)
         if not os.path.isfile(pred_smpl_path):
             continue
@@ -100,10 +100,14 @@ def main():
         # mpjpe
         considered_joints_num = 22
         pred_info = np.load(
-            os.path.join(pred_folder, name, "pred_smpl_info_before_cham_refine.npz")
+            os.path.join(
+                pred_folder, "vis", name, "pred_smpl_info_before_cham_refine.npz"
+            )
         )
         pred_info_cham = np.load(
-            os.path.join(pred_folder, name, "pred_smpl_info_after_cham_refine.npz")
+            os.path.join(
+                pred_folder, "vis", name, "pred_smpl_info_after_cham_refine.npz"
+            )
         )
         pred_joints = pred_info["joints"]
         pred_joints_cham = pred_info_cham["joints"]
