@@ -45,6 +45,7 @@ from lvd_templ.evaluation.utils import (
     fit_plus_D,
 )
 from lvd_templ.evaluation.fit_SMPL import fit_smpl
+from lvd_templ.evaluation.fit_SMPLX import fit_smplx
 
 import warnings
 
@@ -96,8 +97,11 @@ def get_model(chk):
     cfg_model.nn.data.datasets.train["val_ids"] = (
         "datafolder_new/useful_data_cape/val_ids.pkl"
     )
+    # print(cfg_model.nn.data.datasets.train)
+    # exit()
     train_data = hydra.utils.instantiate(cfg_model.nn.data.datasets.train, mode="test")
     MD = MetaData(class_vocab=train_data.class_vocab)
+    # print(train_data.class_vocab)
 
     # Instantiating the correct nentwork
     model: pl.LightningModule = hydra.utils.instantiate(
@@ -107,6 +111,8 @@ def get_model(chk):
     # Restoring the old checkpoint
     old_checkpoint = NNCheckpointIO.load(path=chk_zip)
     module = model._load_model_state(checkpoint=old_checkpoint, metadata=MD).to(device)
+    # print(module)
+    # exit()
     module.model.eval()
 
     return module, MD, train_data, cfg_model
@@ -130,7 +136,7 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_new_fit"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
     if not (os.path.exists(out_dir + "/vis")):
@@ -330,9 +336,10 @@ def run(cfg: DictConfig) -> str:
         reg_src = transformations.transform_points(reg_src, inv_Rx)
 
         # FIT SMPL Model to the LVD Prediction
-        out_s, params = SMPLX_fitting(
-            smplx_model, reg_src, gt_idxs, prior, iterations=2000
-        )
+        # out_s, params = SMPLX_fitting(
+        #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
+        # )
+        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():

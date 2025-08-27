@@ -45,6 +45,7 @@ from lvd_templ.evaluation.utils import (
     fit_plus_D,
 )
 from lvd_templ.evaluation.fit_SMPL import fit_smpl
+from lvd_templ.evaluation.fit_SMPLX import fit_smplx
 
 import warnings
 
@@ -130,7 +131,7 @@ def run(cfg: DictConfig) -> str:
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"4d-dress_{input_type}_79_x"
+    out_dir = out_folder + model_name + "/" + f"4d-dress_{input_type}_79_x_new_fit"
 
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
@@ -319,9 +320,10 @@ def run(cfg: DictConfig) -> str:
         # print(reg_src.shape)
         # print(gt_idxs.shape)
         # exit()
-        out_s, params = SMPLX_fitting(
-            smplx_model, reg_src, gt_idxs, prior, iterations=2000
-        )
+        # out_s, params = SMPLX_fitting(
+        #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
+        # )
+        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
