@@ -42,10 +42,13 @@ from lvd_templ.evaluation.utils import (
     SMPLX_fitting,
     fit_cham,
     fit_cham_smplx,
+    fit_cham_smplx_2,
     fit_plus_D,
 )
 from lvd_templ.evaluation.fit_SMPL import fit_smpl
+
 from lvd_templ.evaluation.fit_SMPLX import fit_smplx
+from lvd_templ.evaluation.fit_SMPLX_3 import fit_smplx_3
 
 import warnings
 
@@ -136,7 +139,7 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_new_fit"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_new_fit_3_cham_2"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
     if not (os.path.exists(out_dir + "/vis")):
@@ -160,11 +163,11 @@ def run(cfg: DictConfig) -> str:
     # exit()
 
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
-    scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part4
+    scans_part1 = scans[: len(scans) // 3]
+    scans_part2 = scans[len(scans) // 3 : 2 * len(scans) // 3]
+    scans_part3 = scans[2 * len(scans) // 3 :]
+    # scans_part4 = scans[3 * len(scans) // 4 :]
+    scans = scans_part3
     # filtering and sampling with ratio=4
     # print("start filtering scans with eval ids")
     # eval_ids = ['00122', '00159', '00215']
@@ -339,7 +342,8 @@ def run(cfg: DictConfig) -> str:
         # out_s, params = SMPLX_fitting(
         #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
         # )
-        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        out_s, params = fit_smplx_3(smplx_model, reg_src, gt_idxs)
+        # out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
@@ -379,7 +383,8 @@ def run(cfg: DictConfig) -> str:
             mesh_src.vertices = transformations.transform_points(
                 mesh_src.vertices, inv_Rx
             )
-            out_cham_s, params = fit_cham_smplx(
+            # out_cham_s, params = fit_cham_smplx(
+            out_cham_s, params = fit_cham_smplx_2(
                 smplx_model,
                 out_s,
                 mesh_src.vertices,

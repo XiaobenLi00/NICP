@@ -540,128 +540,135 @@ def main():
         )
     os.rename(
         v2v_file_all,
-        os.path.join(pred_folder, f"v2v_error_{sum_v2v_error_all / sample_num}.txt"),
+        os.path.join(
+            pred_folder, f"v2v_error_{sum_v2v_error_all / sample_num}_new.txt"
+        ),
     )
     os.rename(
         v2v_file_cham_all,
         os.path.join(
-            pred_folder, f"v2v_error_cham_{sum_v2v_error_cham_all / sample_num}.txt"
+            pred_folder, f"v2v_error_cham_{sum_v2v_error_cham_all / sample_num}_new.txt"
         ),
     )
     os.rename(
         v2v_file_hands,
         os.path.join(
-            pred_folder, f"v2v_error_hands_{sum_v2v_error_hands / sample_num}.txt"
+            pred_folder, f"v2v_error_hands_{sum_v2v_error_hands / sample_num}_new.txt"
         ),
     )
     os.rename(
         v2v_file_cham_hands,
         os.path.join(
             pred_folder,
-            f"v2v_error_cham_hands_{sum_v2v_error_cham_hands / sample_num}.txt",
+            f"v2v_error_cham_hands_{sum_v2v_error_cham_hands / sample_num}_new.txt",
         ),
     )
     os.rename(
         v2v_file_lhand,
         os.path.join(
-            pred_folder, f"v2v_error_lhand_{sum_v2v_error_lhand / sample_num}.txt"
+            pred_folder, f"v2v_error_lhand_{sum_v2v_error_lhand / sample_num}_new.txt"
         ),
     )
     os.rename(
         v2v_file_cham_lhand,
         os.path.join(
             pred_folder,
-            f"v2v_error_cham_lhand_{sum_v2v_error_cham_lhand / sample_num}.txt",
+            f"v2v_error_cham_lhand_{sum_v2v_error_cham_lhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         v2v_file_rhand,
         os.path.join(
-            pred_folder, f"v2v_error_rhand_{sum_v2v_error_rhand / sample_num}.txt"
+            pred_folder, f"v2v_error_rhand_{sum_v2v_error_rhand / sample_num}_new.txt"
         ),
     )
     os.rename(
         v2v_file_cham_rhand,
         os.path.join(
             pred_folder,
-            f"v2v_error_cham_rhand_{sum_v2v_error_cham_rhand / sample_num}.txt",
+            f"v2v_error_cham_rhand_{sum_v2v_error_cham_rhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         v2v_file_other,
         os.path.join(
-            pred_folder, f"v2v_error_other_{sum_v2v_error_other / sample_num}.txt"
+            pred_folder, f"v2v_error_other_{sum_v2v_error_other / sample_num}_new.txt"
         ),
     )
     os.rename(
         v2v_file_cham_other,
         os.path.join(
             pred_folder,
-            f"v2v_error_cham_other_{sum_v2v_error_cham_other / sample_num}.txt",
+            f"v2v_error_cham_other_{sum_v2v_error_cham_other / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_all,
         os.path.join(
-            pred_folder, f"mpjpe_error_{sum_mpjpe_error_all / sample_num}.txt"
+            pred_folder, f"mpjpe_error_{sum_mpjpe_error_all / sample_num}_new.txt"
         ),
     )
     os.rename(
         mpjpe_file_cham_all,
         os.path.join(
-            pred_folder, f"mpjpe_error_cham_{sum_mpjpe_error_cham_all / sample_num}.txt"
+            pred_folder,
+            f"mpjpe_error_cham_{sum_mpjpe_error_cham_all / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_hands,
         os.path.join(
-            pred_folder, f"mpjpe_error_hands_{sum_mpjpe_error_hands / sample_num}.txt"
+            pred_folder,
+            f"mpjpe_error_hands_{sum_mpjpe_error_hands / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_cham_hands,
         os.path.join(
             pred_folder,
-            f"mpjpe_error_cham_hands_{sum_mpjpe_error_cham_hands / sample_num}.txt",
+            f"mpjpe_error_cham_hands_{sum_mpjpe_error_cham_hands / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_lhand,
         os.path.join(
-            pred_folder, f"mpjpe_error_lhand_{sum_mpjpe_error_lhand / sample_num}.txt"
+            pred_folder,
+            f"mpjpe_error_lhand_{sum_mpjpe_error_lhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_cham_lhand,
         os.path.join(
             pred_folder,
-            f"mpjpe_error_cham_lhand_{sum_mpjpe_error_cham_lhand / sample_num}.txt",
+            f"mpjpe_error_cham_lhand_{sum_mpjpe_error_cham_lhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_rhand,
         os.path.join(
-            pred_folder, f"mpjpe_error_rhand_{sum_mpjpe_error_rhand / sample_num}.txt"
+            pred_folder,
+            f"mpjpe_error_rhand_{sum_mpjpe_error_rhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_cham_rhand,
         os.path.join(
             pred_folder,
-            f"mpjpe_error_cham_rhand_{sum_mpjpe_error_cham_rhand / sample_num}.txt",
+            f"mpjpe_error_cham_rhand_{sum_mpjpe_error_cham_rhand / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_other,
         os.path.join(
-            pred_folder, f"mpjpe_error_other_{sum_mpjpe_error_other / sample_num}.txt"
+            pred_folder,
+            f"mpjpe_error_other_{sum_mpjpe_error_other / sample_num}_new.txt",
         ),
     )
     os.rename(
         mpjpe_file_cham_other,
         os.path.join(
             pred_folder,
-            f"mpjpe_error_cham_other_{sum_mpjpe_error_cham_other / sample_num}.txt",
+            f"mpjpe_error_cham_other_{sum_mpjpe_error_cham_other / sample_num}_new.txt",
         ),
     )
 

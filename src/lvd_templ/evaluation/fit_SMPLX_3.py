@@ -10,14 +10,16 @@ import os
 import theseus as th
 
 
-def fit_smplx(
+def fit_smplx_3(
     smplx_model,
     in_points,
     gt_idxs,
     steps_stage0=30,
     steps_stage1=50,
+    steps_stage2=30,
     lr_stage0=5e-1,
     lr_stage1=2e-1,
+    lr_stage2=2e-1,
 ):
     print("Start fitting SMPLX")
     # in_points = in_points[::10]  # (69, 3)
@@ -44,11 +46,6 @@ def fit_smplx(
     def marker_error_fn_0(optim_vars, aux_vars):
         (
             body_pose,
-            lhand_pose,
-            rhand_pose,
-            jaw_pose,
-            leye_pose,
-            reye_pose,
             expression_optimized,
             shape_optimized,
             global_orient,
@@ -60,6 +57,17 @@ def fit_smplx(
         shape_frozen = torch.zeros((batch_size, 10 - 2)).to(torch.device("cuda"))
         expression_frozen = torch.zeros((batch_size, 10 - 2)).to(torch.device("cuda"))
 
+        # 使用固定的手部和面部pose
+        lhand_pose_fixed = torch.zeros(
+            (batch_size, smplx_model.NUM_HAND_JOINTS * 3)
+        ).to(torch.device("cuda"))
+        rhand_pose_fixed = torch.zeros(
+            (batch_size, smplx_model.NUM_HAND_JOINTS * 3)
+        ).to(torch.device("cuda"))
+        jaw_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+        leye_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+        reye_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+
         # forward
         smplx_output = smplx_model(
             global_orient=global_orient.tensor,
@@ -68,11 +76,11 @@ def fit_smplx(
             expression=torch.cat(
                 [expression_optimized.tensor, expression_frozen], dim=1
             ),
-            jaw_pose=jaw_pose.tensor,
-            leye_pose=leye_pose.tensor,
-            reye_pose=reye_pose.tensor,
-            left_hand_pose=lhand_pose.tensor,
-            right_hand_pose=rhand_pose.tensor,
+            jaw_pose=jaw_pose_fixed,
+            leye_pose=leye_pose_fixed,
+            reye_pose=reye_pose_fixed,
+            left_hand_pose=lhand_pose_fixed,
+            right_hand_pose=rhand_pose_fixed,
             transl=translation.tensor,
             return_verts=True,
         )
@@ -96,11 +104,6 @@ def fit_smplx(
     def marker_error_fn_1(optim_vars, aux_vars):
         (
             body_pose,
-            lhand_pose,
-            rhand_pose,
-            jaw_pose,
-            leye_pose,
-            reye_pose,
             expression,
             shape,
             global_orient,
@@ -109,6 +112,66 @@ def fit_smplx(
         pred_markers_position = aux_vars[0]
 
         batch_size = shape.tensor.shape[0]
+
+        # 使用固定的手部和面部pose
+        lhand_pose_fixed = torch.zeros(
+            (batch_size, smplx_model.NUM_HAND_JOINTS * 3)
+        ).to(torch.device("cuda"))
+        rhand_pose_fixed = torch.zeros(
+            (batch_size, smplx_model.NUM_HAND_JOINTS * 3)
+        ).to(torch.device("cuda"))
+        jaw_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+        leye_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+        reye_pose_fixed = torch.zeros((batch_size, 1 * 3)).to(torch.device("cuda"))
+
+        # forward
+        smplx_output = smplx_model(
+            global_orient=global_orient.tensor,
+            body_pose=body_pose.tensor,
+            betas=shape.tensor,
+            expression=expression.tensor,
+            jaw_pose=jaw_pose_fixed,
+            leye_pose=leye_pose_fixed,
+            reye_pose=reye_pose_fixed,
+            left_hand_pose=lhand_pose_fixed,
+            right_hand_pose=rhand_pose_fixed,
+            transl=translation.tensor,
+            return_verts=True,
+        )
+        smplx_vertices = smplx_output.vertices  # shape(B, V, 3)
+
+        marker_vindices = (
+            torch.tensor(list(gt_idxs), device=smplx_vertices.device)
+            .unsqueeze(0)
+            .expand(batch_size, -1)
+        )
+        forwarded_markers_position = torch.gather(
+            smplx_vertices, 1, marker_vindices.unsqueeze(-1).expand(-1, -1, 3)
+        )  # shape(B, num_markers, 3)
+
+        err = pred_markers_position.tensor - forwarded_markers_position
+        err = err.reshape(batch_size, -1)
+
+        return err
+
+    def marker_error_fn_2(optim_vars, aux_vars):
+        (
+            lhand_pose,
+            rhand_pose,
+            jaw_pose,
+            leye_pose,
+            reye_pose,
+        ) = optim_vars
+        (
+            body_pose,
+            expression,
+            shape,
+            global_orient,
+            translation,
+            pred_markers_position,
+        ) = aux_vars
+
+        batch_size = shape.shape[0]
 
         # forward
         smplx_output = smplx_model(
@@ -147,26 +210,13 @@ def fit_smplx(
     body_pose = torch.zeros((B, smplx_model.NUM_BODY_JOINTS * 3)).to(
         torch.device("cuda")
     )
-    lhand_pose = torch.zeros((B, smplx_model.NUM_HAND_JOINTS * 3)).to(
-        torch.device("cuda")
-    )
-    rhand_pose = torch.zeros((B, smplx_model.NUM_HAND_JOINTS * 3)).to(
-        torch.device("cuda")
-    )
-    jaw_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
-    leye_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
-    reye_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
+
     expression_optimized = torch.zeros((B, 2)).to(torch.device("cuda"))
     shape_optimized = torch.zeros((B, 2)).to(torch.device("cuda"))
     global_orient = torch.zeros((B, 3)).to(torch.device("cuda"))
     translation = torch.zeros((B, 3)).to(torch.device("cuda"))
 
     body_pose = th.Vector(tensor=body_pose, name="body_pose")
-    lhand_pose = th.Vector(tensor=lhand_pose, name="lhand_pose")
-    rhand_pose = th.Vector(tensor=rhand_pose, name="rhand_pose")
-    jaw_pose = th.Vector(tensor=jaw_pose, name="jaw_pose")
-    leye_pose = th.Vector(tensor=leye_pose, name="leye_pose")
-    reye_pose = th.Vector(tensor=reye_pose, name="reye_pose")
     expression_optimized = th.Vector(
         tensor=expression_optimized, name="expression_optimized"
     )
@@ -180,11 +230,6 @@ def fit_smplx(
 
     optim_vars = [
         body_pose,
-        lhand_pose,
-        rhand_pose,
-        jaw_pose,
-        leye_pose,
-        reye_pose,
         expression_optimized,
         shape_optimized,
         global_orient,
@@ -215,11 +260,6 @@ def fit_smplx(
 
     theseus_inputs = {
         "body_pose": body_pose,
-        "lhand_pose": lhand_pose,
-        "rhand_pose": rhand_pose,
-        "jaw_pose": jaw_pose,
-        "leye_pose": leye_pose,
-        "reye_pose": reye_pose,
         "expression_optimized": expression_optimized,
         "shape_optimized": shape_optimized,
         "global_orient": global_orient,
@@ -233,11 +273,6 @@ def fit_smplx(
     )  # TODO: damping = ??
 
     body_pose = updated_inputs["body_pose"]
-    lhand_pose = updated_inputs["lhand_pose"]
-    rhand_pose = updated_inputs["rhand_pose"]
-    jaw_pose = updated_inputs["jaw_pose"]
-    leye_pose = updated_inputs["leye_pose"]
-    reye_pose = updated_inputs["reye_pose"]
     expression_optimized = updated_inputs["expression_optimized"]
     shape_optimized = updated_inputs["shape_optimized"]
     global_orient = updated_inputs["global_orient"]
@@ -247,11 +282,6 @@ def fit_smplx(
     print("Optimization stage 1:")
 
     body_pose = body_pose.detach()
-    lhand_pose = lhand_pose.detach()
-    rhand_pose = rhand_pose.detach()
-    jaw_pose = jaw_pose.detach()
-    leye_pose = leye_pose.detach()
-    reye_pose = reye_pose.detach()
     shape_frozen = torch.zeros((B, 10 - 2)).to(torch.device("cuda"))
     expression_frozen = torch.zeros((B, 10 - 2)).to(torch.device("cuda"))
     shape = torch.cat([shape_optimized, shape_frozen], dim=1).detach()
@@ -260,11 +290,6 @@ def fit_smplx(
     translation = translation.detach()
 
     body_pose = th.Vector(tensor=body_pose, name="body_pose")
-    lhand_pose = th.Vector(tensor=lhand_pose, name="lhand_pose")
-    rhand_pose = th.Vector(tensor=rhand_pose, name="rhand_pose")
-    jaw_pose = th.Vector(tensor=jaw_pose, name="jaw_pose")
-    leye_pose = th.Vector(tensor=leye_pose, name="leye_pose")
-    reye_pose = th.Vector(tensor=reye_pose, name="reye_pose")
     expression = th.Vector(tensor=expression, name="expression")
     shape = th.Vector(tensor=shape, name="shape")
     global_orient = th.Vector(tensor=global_orient, name="global_orient")
@@ -272,11 +297,6 @@ def fit_smplx(
 
     optim_vars = [
         body_pose,
-        lhand_pose,
-        rhand_pose,
-        jaw_pose,
-        leye_pose,
-        reye_pose,
         expression,
         shape,
         global_orient,
@@ -303,11 +323,6 @@ def fit_smplx(
 
     theseus_inputs = {
         "body_pose": body_pose,
-        "lhand_pose": lhand_pose,
-        "rhand_pose": rhand_pose,
-        "jaw_pose": jaw_pose,
-        "leye_pose": leye_pose,
-        "reye_pose": reye_pose,
         "expression": expression,
         "shape": shape,
         "global_orient": global_orient,
@@ -320,30 +335,108 @@ def fit_smplx(
     )  # TODO: damping = ??
 
     body_pose = updated_inputs["body_pose"]
-    lhand_pose = updated_inputs["lhand_pose"]
-    rhand_pose = updated_inputs["rhand_pose"]
-    jaw_pose = updated_inputs["jaw_pose"]
-    leye_pose = updated_inputs["leye_pose"]
-    reye_pose = updated_inputs["reye_pose"]
     expression = updated_inputs["expression"]
     shape = updated_inputs["shape"]
     global_orient = updated_inputs["global_orient"]
     translation = updated_inputs["translation"]
+
     # print(translation)
     # exit()
 
+    # STAGE 2: OPTIMIZE HAND AND FACE POSES
+    print("Optimization stage 2:")
+    lhand_pose = torch.zeros((B, smplx_model.NUM_HAND_JOINTS * 3)).to(
+        torch.device("cuda")
+    )
+    rhand_pose = torch.zeros((B, smplx_model.NUM_HAND_JOINTS * 3)).to(
+        torch.device("cuda")
+    )
+    jaw_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
+    leye_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
+    reye_pose = torch.zeros((B, 1 * 3)).to(torch.device("cuda"))
+    body_pose = body_pose.detach()
+    expression = torch.cat([expression_optimized, expression_frozen], dim=1).detach()
+    global_orient = global_orient.detach()
+    translation = translation.detach()
+    shape = shape.detach()
+
+    # 创建专门用于Stage 2的优化变量
+    lhand_pose = th.Vector(tensor=lhand_pose, name="lhand_pose")
+    rhand_pose = th.Vector(tensor=rhand_pose, name="rhand_pose")
+    jaw_pose = th.Vector(tensor=jaw_pose, name="jaw_pose")
+    leye_pose = th.Vector(tensor=leye_pose, name="leye_pose")
+    reye_pose = th.Vector(tensor=reye_pose, name="reye_pose")
+
+    body_pose = th.Variable(tensor=body_pose, name="body_pose")
+    expression = th.Variable(tensor=expression, name="expression")
+    shape = th.Variable(tensor=shape, name="shape")
+    global_orient = th.Variable(tensor=global_orient, name="global_orient")
+    translation = th.Variable(tensor=translation, name="translation")
+    # pred_markers_position = th.Variable(tensor=pred_markers_position, name="pred_markers_position")
+
+    optim_vars_stage2 = [
+        lhand_pose,
+        rhand_pose,
+        jaw_pose,
+        leye_pose,
+        reye_pose,
+    ]
+    aux_vars_stage2 = [
+        body_pose,
+        expression,
+        shape,
+        global_orient,
+        translation,
+        pred_markers_position,
+    ]
+
+    w_marker = th.ScaleCostWeight(loss_weights["marker_loss"])
+    marker_cost_function_stage2 = th.AutoDiffCostFunction(
+        optim_vars_stage2,
+        marker_error_fn_2,
+        len(gt_idxs) * 3,
+        cost_weight=w_marker,
+        aux_vars=aux_vars_stage2,
+        name="marker_cost_function_stage2",
+    )
+
+    objective_stage2 = th.Objective().to(torch.device("cuda"))
+    objective_stage2.add(marker_cost_function_stage2)
+    optimizer_stage2 = th.LevenbergMarquardt(
+        objective_stage2, max_iterations=steps_stage2, step_size=lr_stage2
+    )
+    theseus_layer_stage2 = th.TheseusLayer(optimizer_stage2).to(torch.device("cuda"))
+
+    theseus_inputs_stage2 = {
+        "lhand_pose": lhand_pose,
+        "rhand_pose": rhand_pose,
+        "jaw_pose": jaw_pose,
+        "leye_pose": leye_pose,
+        "reye_pose": reye_pose,
+    }
+
+    updated_inputs_stage2, _ = theseus_layer_stage2.forward(
+        theseus_inputs_stage2, optimizer_kwargs={"verbose": False}
+    )
+
+    lhand_pose = updated_inputs_stage2["lhand_pose"]
+    rhand_pose = updated_inputs_stage2["rhand_pose"]
+    jaw_pose = updated_inputs_stage2["jaw_pose"]
+    leye_pose = updated_inputs_stage2["leye_pose"]
+    reye_pose = updated_inputs_stage2["reye_pose"]
+
     # get final smpl meshes
     smplx_output = smplx_model(
-        global_orient=global_orient,
-        body_pose=body_pose,
-        betas=shape,
-        expression=expression,
+        global_orient=global_orient.tensor,
+        body_pose=body_pose.tensor,
+        betas=shape.tensor,
+        expression=expression.tensor,
         jaw_pose=jaw_pose,
         leye_pose=leye_pose,
         reye_pose=reye_pose,
         left_hand_pose=lhand_pose,
         right_hand_pose=rhand_pose,
-        transl=translation,
+        transl=translation.tensor,
         return_verts=True,
     )
     joints = smplx_output.joints  # shape(B, J, 3)
@@ -370,8 +463,8 @@ def fit_smplx(
     output_smplx_info["pose"] = torch.nn.Parameter(
         torch.cat(
             [
-                global_orient,
-                body_pose,
+                global_orient.tensor,
+                body_pose.tensor,
                 jaw_pose,
                 leye_pose,
                 reye_pose,
@@ -381,10 +474,10 @@ def fit_smplx(
             dim=1,
         )
     )
-    output_smplx_info["beta"] = torch.nn.Parameter(shape)
-    output_smplx_info["expression"] = torch.nn.Parameter(expression)
+    output_smplx_info["beta"] = torch.nn.Parameter(shape.tensor)
+    output_smplx_info["expression"] = torch.nn.Parameter(expression.tensor)
     # output_smpl_info["global_orient"] = global_orient.detach().cpu().numpy()
-    output_smplx_info["trans"] = torch.nn.Parameter(translation)
+    output_smplx_info["trans"] = torch.nn.Parameter(translation.tensor)
     output_smplx_info["joints"] = joints
     # shape(B, 23, 3), shape(B, 10), shape(B, 3), shape(B, 3), shape(B, 45, 3)
 

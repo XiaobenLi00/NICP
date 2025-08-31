@@ -835,6 +835,145 @@ def fit_cham_smplx(SMPLX_model, pred_mesh, vertices_scan, prior, init, bidir=0):
     return pred_mesh3, params
 
 
+def fit_cham_smplx_2(SMPLX_model, pred_mesh, vertices_scan, prior, init, bidir=0):
+    chamferDist = ChamferDistance()
+    parameters_smplx = OptimizationSMPLX().cuda()
+    parameters_smplx.pose.data = init["pose"].data.clone()
+    parameters_smplx.beta.data = init["beta"].data.clone()
+    parameters_smplx.trans.data = init["trans"].data.clone()
+    parameters_smplx.expression.data = init["expression"].data.clone()
+
+    lr = 2e-2
+    iterations = 500 # Total iterations
+
+    optimizer_smplx = torch.optim.Adam(parameters_smplx.parameters(), lr=lr)
+    
+    factor_beta_reg = 0.2
+    factor_expression_reg = 0.2
+
+    # Step 1: Optimize all parameters except hand poses
+    for i in tqdm.tqdm(range(iterations // 2), desc="Chamfer Step 1 (Body)"):
+        pose, beta, trans, expression = parameters_smplx.forward()
+        
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+        ).vertices[0]
+
+        if bidir == 0:
+            d1 = torch.sqrt(chamferDist(torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), vertices_smplx.unsqueeze(0), False)).mean()
+            d2 = torch.sqrt(chamferDist(vertices_smplx.unsqueeze(0), torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), False)).mean()
+            loss = d1 + d2
+        elif bidir == 1:
+            loss = torch.sqrt(chamferDist(torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), vertices_smplx.unsqueeze(0), False)).mean()
+        elif bidir == -1:
+            loss = torch.sqrt(chamferDist(vertices_smplx.unsqueeze(0), torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), False)).mean()
+
+        beta_loss = (beta**2).mean()
+        expression_loss = (expression**2).mean()
+        loss = loss + beta_loss * factor_beta_reg + expression_loss * factor_expression_reg
+
+        optimizer_smplx.zero_grad()
+        loss.backward()
+        
+        if parameters_smplx.pose.grad is not None:
+            parameters_smplx.pose.grad[:, 75:] = 0
+
+        optimizer_smplx.step()
+
+        for param_group in optimizer_smplx.param_groups:
+            param_group["lr"] = lr * ((iterations // 2) - i) / (iterations // 2)
+
+    # Step 2: Optimize only hand poses
+    for i in tqdm.tqdm(range(iterations // 2), desc="Chamfer Step 2 (Hands)"):
+        pose, beta, trans, expression = parameters_smplx.forward()
+
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+        ).vertices[0]
+
+        if bidir == 0:
+            d1 = torch.sqrt(chamferDist(torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), vertices_smplx.unsqueeze(0), False)).mean()
+            d2 = torch.sqrt(chamferDist(vertices_smplx.unsqueeze(0), torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), False)).mean()
+            loss = d1 + d2
+        elif bidir == 1:
+            loss = torch.sqrt(chamferDist(torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), vertices_smplx.unsqueeze(0), False)).mean()
+        elif bidir == -1:
+            loss = torch.sqrt(chamferDist(vertices_smplx.unsqueeze(0), torch.FloatTensor(vertices_scan).cuda().unsqueeze(0), False)).mean()
+        
+        optimizer_smplx.zero_grad()
+        loss.backward()
+
+        if parameters_smplx.pose.grad is not None:
+            parameters_smplx.pose.grad[:, :75] = 0
+        if parameters_smplx.beta.grad is not None:
+            parameters_smplx.beta.grad.zero_()
+        if parameters_smplx.trans.grad is not None:
+            parameters_smplx.trans.grad.zero_()
+        if parameters_smplx.expression.grad is not None:
+            parameters_smplx.expression.grad.zero_()
+
+        optimizer_smplx.step()
+
+        for param_group in optimizer_smplx.param_groups:
+            param_group["lr"] = lr * ((iterations // 2) - i) / (iterations // 2)
+
+    with torch.no_grad():
+        pose, beta, trans, expression = parameters_smplx.forward()
+        vertices_smplx = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_verts=True,
+        ).vertices[0]
+        pred_mesh3 = vertices_smplx.cpu().data.numpy()
+        joints = SMPLX_model.forward(
+            betas=beta,
+            global_orient=pose[:, :3],
+            body_pose=pose[:, 3 : 22 * 3],
+            jaw_pose=pose[:, 22 * 3 : 23 * 3],
+            leye_pose=pose[:, 23 * 3 : 24 * 3],
+            reye_pose=pose[:, 24 * 3 : 25 * 3],
+            left_hand_pose=pose[:, 25 * 3 : 40 * 3],
+            right_hand_pose=pose[:, 40 * 3 : 55 * 3],
+            expression=expression,
+            transl=trans,
+            return_joints=True,
+        ).joints[0]
+        params = {}
+        params["loss"] = loss
+        params["beta"] = beta
+        params["pose"] = pose
+        params["trans"] = trans
+        params["joints"] = joints
+        params["expression"] = expression
+    return pred_mesh3, params
+
+
 def get_match_LVD(s_src, s_tar, reg_src, reg_tar):
     # Returns for each point of s_src the match for s_tar
     nbrs = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(reg_src)
