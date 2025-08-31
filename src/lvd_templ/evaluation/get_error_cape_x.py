@@ -23,7 +23,7 @@ def main():
         "datafolder_new/CAPE_reorganized/cape_release/smplx_ratio5_from_PTF"
     )
     gt_scan_folder = "datafolder_new/CAPE_reorganized/cape_release/model_reorganized"
-    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_77_x_new_fit"
+    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_77_x_new_fit_3_cham_2"
 
     # gt_smpl_folder = "datafolder/4D-DRESS/data_processed/smplh"
     # pred_folder = "/home/boqian/code/NICP/output/matchAMASS_4D-DRESS/demo"
