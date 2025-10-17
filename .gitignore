@@ -38,3 +38,4 @@ model.npz
 __pycache__
 *.so
 training/data/preprocess_voxels
+storage
