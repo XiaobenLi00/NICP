@@ -23,7 +23,14 @@ def main():
         "datafolder_new/CAPE_reorganized/cape_release/smplx_ratio5_from_PTF"
     )
     gt_scan_folder = "datafolder_new/CAPE_reorganized/cape_release/model_reorganized"
-    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_77_x_new_fit_3_cham_2"
+    # pred_folder = "output/matchAMASS_CAPE/cape_hitpts_77_x_new_fit"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_cut_partial_68"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_single_view_76"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_50_500_cape"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_500_50_cape"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_500_500_cape"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_gen_cape"
+    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_gen+_cape"
 
     # gt_smpl_folder = "datafolder/4D-DRESS/data_processed/smplh"
     # pred_folder = "/home/boqian/code/NICP/output/matchAMASS_4D-DRESS/demo"
@@ -39,18 +46,21 @@ def main():
     left_hand = list(set(smplx_seg["leftHand"] + smplx_seg["leftHandIndex1"]))
     # 合并左右手所有顶点，去重
     two_hands = list(set(right_hand + left_hand))
+    head = list(set(smplx_seg["head"]))
     # 除去手部相关key，合并剩余所有body part的顶点索引，去重
-    hand_keys = {"rightHand", "rightHandIndex1", "leftHand", "leftHandIndex1"}
+    hand_face_keys = {"rightHand", "rightHandIndex1", "leftHand", "leftHandIndex1", "head"}
     body_others = []
     for part in body_parts:
-        if part not in hand_keys:
+        if part not in hand_face_keys:
             body_others += smplx_seg[part]
     body_others = list(set(body_others))
 
     full_idxs = np.arange(0, 55)
-    body_idxs = np.arange(0, 22)
+    # 不能直接用np.arange减去list，应该用np.setdiff1d来排除指定的索引
+    body_idxs = np.setdiff1d(np.arange(0, 22), [12, 15])
     lhand_idxs = np.arange(25, 40)
     rhand_idxs = np.arange(40, 55)
+    head_idxs = [12, 15, 22, 23, 24]
     two_hands_idxs = np.arange(25, 55)
 
     # exit()
@@ -59,24 +69,28 @@ def main():
     sum_v2v_error_hands = 0.0
     sum_v2v_error_lhand = 0.0
     sum_v2v_error_rhand = 0.0
+    sum_v2v_error_head = 0.0
     sum_v2v_error_other = 0.0
 
     sum_mpjpe_error_all = 0.0
     sum_mpjpe_error_hands = 0.0
     sum_mpjpe_error_lhand = 0.0
     sum_mpjpe_error_rhand = 0.0
+    sum_mpjpe_error_head = 0.0
     sum_mpjpe_error_other = 0.0
 
     sum_v2v_error_cham_all = 0.0
     sum_v2v_error_cham_hands = 0.0
     sum_v2v_error_cham_lhand = 0.0
     sum_v2v_error_cham_rhand = 0.0
+    sum_v2v_error_cham_head = 0.0
     sum_v2v_error_cham_other = 0.0
 
     sum_mpjpe_error_cham_all = 0.0
     sum_mpjpe_error_cham_hands = 0.0
     sum_mpjpe_error_cham_lhand = 0.0
     sum_mpjpe_error_cham_rhand = 0.0
+    sum_mpjpe_error_cham_head = 0.0
     sum_mpjpe_error_cham_other = 0.0
 
     sample_num = 0
@@ -99,6 +113,11 @@ def main():
     mpjpe_file_rhand = os.path.join(pred_folder, "mpjpe_error_rhand.txt")
     v2v_file_cham_rhand = os.path.join(pred_folder, "v2v_error_cham_rhand.txt")
     mpjpe_file_cham_rhand = os.path.join(pred_folder, "mpjpe_error_cham_rhand.txt")
+
+    v2v_file_head = os.path.join(pred_folder, "v2v_error_head.txt")
+    mpjpe_file_head = os.path.join(pred_folder, "mpjpe_error_head.txt")
+    v2v_file_cham_head = os.path.join(pred_folder, "v2v_error_cham_head.txt")
+    mpjpe_file_cham_head = os.path.join(pred_folder, "mpjpe_error_cham_head.txt")
 
     v2v_file_other = os.path.join(pred_folder, "v2v_error_other.txt")
     mpjpe_file_other = os.path.join(pred_folder, "mpjpe_error_other.txt")
@@ -156,6 +175,11 @@ def main():
         gt_smpl_mesh.vertices = gt_smpl_vertices
         gt_scan_mesh.vertices = gt_scan_vertices
 
+        # gt_smpl_mesh.export(os.path.join(pred_folder, "vis", name, f"gt_smpl_mesh.obj"))
+        # gt_scan_mesh.export(os.path.join(pred_folder, "vis", name, f"gt_scan_mesh.obj"))
+        # pred_smpl_mesh.export(os.path.join(pred_folder, "vis", name, f"pred_smpl_mesh.obj"))
+        # pred_smpl_cham_mesh.export(os.path.join(pred_folder, "vis", name, f"pred_smpl_cham_mesh.obj"))
+
         gt_smpl_verts = np.asarray(gt_smpl_mesh.vertices)
         pred_smpl_verts = np.asarray(pred_smpl_mesh.vertices)
         pred_smpl_cham_verts = np.asarray(pred_smpl_cham_mesh.vertices)
@@ -186,6 +210,13 @@ def main():
             gt_smpl_verts[right_hand] - pred_smpl_cham_verts[right_hand], axis=1
         ).mean()
 
+        v2v_error_head = np.linalg.norm(
+            gt_smpl_verts[head] - pred_smpl_verts[head], axis=1
+        ).mean()
+        v2v_error_cham_head = np.linalg.norm(
+            gt_smpl_verts[head] - pred_smpl_cham_verts[head], axis=1
+        ).mean()
+
         v2v_error_other = np.linalg.norm(
             gt_smpl_verts[body_others] - pred_smpl_verts[body_others], axis=1
         ).mean()
@@ -199,6 +230,8 @@ def main():
         sum_v2v_error_cham_lhand += v2v_error_cham_lhand
         sum_v2v_error_rhand += v2v_error_rhand
         sum_v2v_error_cham_rhand += v2v_error_cham_rhand
+        sum_v2v_error_head += v2v_error_head
+        sum_v2v_error_cham_head += v2v_error_cham_head
         sum_v2v_error_other += v2v_error_other
         sum_v2v_error_cham_other += v2v_error_cham_other
 
@@ -214,6 +247,10 @@ def main():
             f.write(f"{name} {v2v_error_rhand}\n")
         with open(v2v_file_cham_rhand, "a") as f:
             f.write(f"{name} {v2v_error_cham_rhand}\n")
+        with open(v2v_file_head, "a") as f:
+            f.write(f"{name} {v2v_error_head}\n")
+        with open(v2v_file_cham_head, "a") as f:
+            f.write(f"{name} {v2v_error_cham_head}\n")
         with open(v2v_file_other, "a") as f:
             f.write(f"{name} {v2v_error_other}\n")
         with open(v2v_file_cham_other, "a") as f:
@@ -291,6 +328,14 @@ def main():
             pred_joints_cham[rhand_idxs] - gt_joints[rhand_idxs],
             axis=1,
         ).mean()
+        mpjpe_error_head = np.linalg.norm(
+            pred_joints[head_idxs] - gt_joints[head_idxs],
+            axis=1,
+        ).mean()
+        mpjpe_error_cham_head = np.linalg.norm(
+            pred_joints_cham[head_idxs] - gt_joints[head_idxs],
+            axis=1,
+        ).mean()
 
         mpjpe_error_other = np.linalg.norm(
             pred_joints[body_idxs] - gt_joints[body_idxs],
@@ -319,6 +364,10 @@ def main():
             f.write(f"{name} {mpjpe_error_rhand}\n")
         with open(mpjpe_file_cham_rhand, "a") as f:
             f.write(f"{name} {mpjpe_error_cham_rhand}\n")
+        with open(mpjpe_file_head, "a") as f:
+            f.write(f"{name} {mpjpe_error_head}\n")
+        with open(mpjpe_file_cham_head, "a") as f:
+            f.write(f"{name} {mpjpe_error_cham_head}\n")
         with open(mpjpe_file_other, "a") as f:
             f.write(f"{name} {mpjpe_error_other}\n")
         with open(mpjpe_file_cham_other, "a") as f:
@@ -333,6 +382,8 @@ def main():
         sum_mpjpe_error_cham_lhand += mpjpe_error_cham_lhand
         sum_mpjpe_error_rhand += mpjpe_error_rhand
         sum_mpjpe_error_cham_rhand += mpjpe_error_cham_rhand
+        sum_mpjpe_error_head += mpjpe_error_head
+        sum_mpjpe_error_cham_head += mpjpe_error_cham_head
         sum_mpjpe_error_other += mpjpe_error_other
         sum_mpjpe_error_cham_other += mpjpe_error_cham_other
 
@@ -383,6 +434,18 @@ def main():
     print(
         "mean v2v error rhand with chamfer refine: ",
         sum_v2v_error_cham_rhand / sample_num,
+        "sample num: ",
+        sample_num,
+    )
+    print(
+        "mean v2v error head: ",
+        sum_v2v_error_head / sample_num,
+        "sample num: ",
+        sample_num,
+    )
+    print(
+        "mean v2v error head with chamfer refine: ",
+        sum_v2v_error_cham_head / sample_num,
         "sample num: ",
         sample_num,
     )
@@ -447,6 +510,18 @@ def main():
         sample_num,
     )
     print(
+        "mean mpjpe error head: ",
+        sum_mpjpe_error_head / sample_num,
+        "sample num: ",
+        sample_num,
+    )
+    print(
+        "mean mpjpe error head with chamfer refine: ",
+        sum_mpjpe_error_cham_head / sample_num,
+        "sample num: ",
+        sample_num,
+    )
+    print(
         "mean mpjpe error other: ",
         sum_mpjpe_error_other / sample_num,
         "sample num: ",
@@ -490,6 +565,14 @@ def main():
         f.write(
             f"mean v2v error rhand with chamfer refine: {sum_v2v_error_cham_rhand / sample_num} sample num: {sample_num}\n"
         )
+    with open(v2v_file_head, "a") as f:
+        f.write(
+            f"mean v2v error head: {sum_v2v_error_head / sample_num} sample num: {sample_num}\n"
+        )
+    with open(v2v_file_cham_head, "a") as f:
+        f.write(
+            f"mean v2v error head with chamfer refine: {sum_v2v_error_cham_head / sample_num} sample num: {sample_num}\n"
+        )
     with open(v2v_file_other, "a") as f:
         f.write(
             f"mean v2v error other: {sum_v2v_error_other / sample_num} sample num: {sample_num}\n"
@@ -529,6 +612,14 @@ def main():
     with open(mpjpe_file_cham_rhand, "a") as f:
         f.write(
             f"mean mpjpe error rhand with chamfer refine: {sum_mpjpe_error_cham_rhand / sample_num} sample num: {sample_num}\n"
+        )
+    with open(mpjpe_file_head, "a") as f:
+        f.write(
+            f"mean mpjpe error head: {sum_mpjpe_error_head / sample_num} sample num: {sample_num}\n"
+        )
+    with open(mpjpe_file_cham_head, "a") as f:
+        f.write(
+            f"mean mpjpe error head with chamfer refine: {sum_mpjpe_error_cham_head / sample_num} sample num: {sample_num}\n"
         )
     with open(mpjpe_file_other, "a") as f:
         f.write(
@@ -587,6 +678,18 @@ def main():
         os.path.join(
             pred_folder,
             f"v2v_error_cham_rhand_{sum_v2v_error_cham_rhand / sample_num}_new.txt",
+        ),
+    )
+    os.rename(
+        v2v_file_head,
+        os.path.join(
+            pred_folder, f"v2v_error_head_{sum_v2v_error_head / sample_num}_new.txt"
+        ),
+    )
+    os.rename(
+        v2v_file_cham_head,
+        os.path.join(
+            pred_folder, f"v2v_error_cham_head_{sum_v2v_error_cham_head / sample_num}_new.txt"
         ),
     )
     os.rename(
@@ -655,6 +758,20 @@ def main():
         os.path.join(
             pred_folder,
             f"mpjpe_error_cham_rhand_{sum_mpjpe_error_cham_rhand / sample_num}_new.txt",
+        ),
+    )
+    os.rename(
+        mpjpe_file_head,
+        os.path.join(
+            pred_folder,
+            f"mpjpe_error_head_{sum_mpjpe_error_head / sample_num}_new.txt",
+        ),
+    )
+    os.rename(
+        mpjpe_file_cham_head,
+        os.path.join(
+            pred_folder,
+            f"mpjpe_error_cham_head_{sum_mpjpe_error_cham_head / sample_num}_new.txt",
         ),
     )
     os.rename(

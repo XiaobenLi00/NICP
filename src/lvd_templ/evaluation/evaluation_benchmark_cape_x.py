@@ -84,7 +84,10 @@ def export_mesh(T, r, t, s, path):
 def get_model(chk):
     # Recovering the Path to the checkpoint
     chk_zip = glob.glob(chk + "checkpoints/*.zip")[0]
-    chk_zip = "./storage/matchAMASS_CAPE/checkpoints/epoch=77-step=253577_x.ckpt.zip"
+    # chk_zip = "./storage/matchAMASS_CAPE/checkpoints/epoch=77-step=253577_x.ckpt.zip"
+    # chk_zip = "datafolder_new/CutPartial_CAPE/epoch=68-step=224318.ckpt.zip"
+    # chk_zip = "datafolder_new/SingleView_CAPE/epoch=76-step=250326.ckpt.zip"
+    chk_zip = "/home/public/NICP_gen/gen_train_cape_validate/epoch=78-step=149862.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
 
@@ -139,16 +142,22 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
     input_type = "pred_inner_points"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_new_fit_3_cham_2"
+    # input_type = "hitpts"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_new_fit"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
+    out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
     if not (os.path.exists(out_dir + "/vis")):
         os.mkdir(out_dir + "/vis")
 
     # path_in = "datafolder/CAPE_reorganized/cape_release/eval_outputs/cape_epoch_32_test"
-    path_in = (
-        "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
-    )
+    # path_in = (
+    #     "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
+    # )
+    path_in = "output/matchAMASS_CAPE/test"
+    # path_in = "datafolder_new/CutPartial_CAPE/cape_55f_partial_raw"
+    # path_in = "datafolder_new/SingleView_CAPE/cape_55f_singleview_raw"
     assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
 
     # Recover Data Path
@@ -158,16 +167,17 @@ def run(cfg: DictConfig) -> str:
     # How the data are organized
     if cfg["core"].challenge in ("demo", "demo_guess_rot"):
         # all_scans = glob.glob(os.path.join(path_in, '*/*.obj'))
-        scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
+        # scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
+        scans = sorted(glob.glob(os.path.join(path_in, "*.obj")))
     # print(f"number of scans: {len(scans)}")
     # exit()
 
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
-    scans_part1 = scans[: len(scans) // 3]
-    scans_part2 = scans[len(scans) // 3 : 2 * len(scans) // 3]
-    scans_part3 = scans[2 * len(scans) // 3 :]
+    # scans_part1 = scans[: len(scans) // 2]
+    # scans_part2 = scans[len(scans) // 2 :]
+    # scans_part3 = scans[2 * len(scans) // 3: ]
     # scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part3
+    # scans = scans_part2
     # filtering and sampling with ratio=4
     # print("start filtering scans with eval ids")
     # eval_ids = ['00122', '00159', '00215']
@@ -248,7 +258,8 @@ def run(cfg: DictConfig) -> str:
         # if(cfg['core'].challenge == 'demo'):
         #     name = os.path.basename(os.path.dirname(scan))
         # else:
-        name = os.path.basename(scan)[23:-4]
+        # name = os.path.basename(scan)[23:-4]
+        name = os.path.basename(scan)[:-4]
         id_ = name
         print(id_)
         # exit()
@@ -267,10 +278,10 @@ def run(cfg: DictConfig) -> str:
             module, MD, train_data, cfg_model = get_model(chk)
 
         # Read input shape
-        # scan_src = trimesh.load(scan, process=False, maintain_order=True)
+        scan_src = trimesh.load(scan, process=False, maintain_order=True)
         # input_points = np.load(scan)['pred_inner_points']
-        input_points = np.load(scan)[input_type]
-        scan_src = trimesh.PointCloud(input_points)
+        # input_points = np.load(scan)[input_type]
+        # scan_src = trimesh.PointCloud(input_points)
 
         Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
         inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
@@ -280,6 +291,7 @@ def run(cfg: DictConfig) -> str:
         voxel_src, mesh_src, scale, trasl = vox_scan(
             scan_src, res, style=data_type, grad=grad
         )
+        print(f"scale: {scale}, trasl: {trasl}")
 
         # Save algined mesh
         if not (os.path.exists(out_dir + "/vis/" + name)):
@@ -289,6 +301,13 @@ def run(cfg: DictConfig) -> str:
             trasl = trasl * 0
             scale = 1
             inv_Rx = np.eye(4)
+        export_mesh(
+            mesh_src.copy(),
+            np.eye(4),
+            trasl * 0,
+            1,
+            out_dir + "/vis/" + name + "/aligned_raw.ply",
+        )
 
         export_mesh(
             mesh_src.copy(),
@@ -342,8 +361,9 @@ def run(cfg: DictConfig) -> str:
         # out_s, params = SMPLX_fitting(
         #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
         # )
-        out_s, params = fit_smplx_3(smplx_model, reg_src, gt_idxs)
-        # out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        # out_s, params = fit_smplx_3(smplx_model, reg_src, gt_idxs)
+        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        print(out_s.shape)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
@@ -363,8 +383,8 @@ def run(cfg: DictConfig) -> str:
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
-        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
-        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
+        # T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+        export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
         # SMPL Refinement with Chamfer
@@ -383,8 +403,8 @@ def run(cfg: DictConfig) -> str:
             mesh_src.vertices = transformations.transform_points(
                 mesh_src.vertices, inv_Rx
             )
-            # out_cham_s, params = fit_cham_smplx(
-            out_cham_s, params = fit_cham_smplx_2(
+            out_cham_s, params = fit_cham_smplx(
+            # out_cham_s, params = fit_cham_smplx_2(
                 smplx_model,
                 out_s,
                 mesh_src.vertices,
@@ -406,10 +426,11 @@ def run(cfg: DictConfig) -> str:
                 expression=params_np["expression"].reshape(10),
             )
 
+            print(smplx_model.faces.shape)
             # Save Output
             T = trimesh.Trimesh(vertices=out_cham_s, faces=smplx_model.faces)
-            # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
-            T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+            export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
+            # T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
 
             # DEBUG: Save some params of the fitting to check quality of the registration
             # for p in params.keys():

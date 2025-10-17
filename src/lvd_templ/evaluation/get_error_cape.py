@@ -2,11 +2,12 @@ import os
 import glob
 import numpy as np
 import trimesh
+import torch
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 import matplotlib.pyplot as plt
-from smplx import SMPL
+from smplx import SMPL, SMPLX
 import json
 
 
@@ -14,6 +15,16 @@ import json
 # mean v2v error:  0.017251761702706554 sample num:  1021
 # mean mpjpe error:  0.01051824787598793 sample num:  1021
 def main():
+
+    bm_path = "datafolder_new/body_models/smplx/SMPLX_FEMALE.pkl"
+    betas = np.array([0.456973523, 2.45616531, 0.937669694, 0.00728722615, 2.05303812, 1.12175035,-0.328998893, 0.327470094, -0.355912685, -1.80482292]).reshape(1,10)
+    bm = SMPLX(model_path = bm_path, ext="pkl", use_pca=False, num_betas=10).cuda()
+    smplx_faces = bm.faces
+
+    output = bm(betas =  torch.from_numpy(betas).float().cuda())
+    t_body = trimesh.Trimesh(vertices=output.vertices.detach().cpu().numpy()[0].astype(np.float64), faces=smplx_faces)
+    t_body.export('smplx_template.obj')
+    exit()
     body_model_path = (
         "datafolder/body_models/smpl/neutral/SMPL_NEUTRAL_10pc_rmchumpy.pkl"
     )

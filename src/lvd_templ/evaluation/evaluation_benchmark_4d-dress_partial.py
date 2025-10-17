@@ -136,7 +136,7 @@ def run(cfg: DictConfig) -> str:
     # input_type = "pred_inner_points"
     input_type = "hitpts"
     out_dir = (
-        out_folder + model_name + "/" + f"4d-dress_{input_type}_79_x_new_fit"
+        out_folder + model_name + "/" + f"partial_test"
     )
 
     if not (os.path.exists(out_dir)):
@@ -147,20 +147,23 @@ def run(cfg: DictConfig) -> str:
     # Recover Data Path
     # path_in = get_dataset(cfg['core'].challenge)
     # path_in = '/home/boqian/code/NICP/datafolder/4D-DRESS/data_processed/model'
-    path_in = "datafolder_new/4D-DRESS/data_reorganized/epoch_37_eval/vis"
+    # path_in = "datafolder_new/4D-DRESS/data_reorganized/epoch_37_eval/vis"
+    path_in = "output/matchAMASS_4D-DRESS/single_data_0924"
 
     assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
 
     # How the data are organized
     if cfg["core"].challenge in ("demo", "demo_guess_rot"):
         # all_scans = glob.glob(os.path.join(path_in, '*/*.obj'))
-        scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
+        scans = sorted(glob.glob(os.path.join(path_in, "*/hitpts_0*.ply")))
+    print(scans)
+    # exit()
     # scans = sorted(np.load(out_dir + "/remaining_scans.npy"))
     scans_part1 = scans[: len(scans) // 3]
     scans_part2 = scans[len(scans) // 3 : 2 * len(scans) // 3]
     scans_part3 = scans[2 * len(scans) // 3 :]
     # scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part3
+    # scans = scans_part3
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")
@@ -232,7 +235,19 @@ def run(cfg: DictConfig) -> str:
         # if(cfg['core'].challenge == 'demo'):
         #     name = os.path.basename(os.path.dirname(scan))
         # else:
-        name = os.path.basename(scan)[23:-4]
+        name = os.path.basename(scan)[7:-4]
+        print(name)
+
+
+        etchx_pred = os.path.join(path_in, name, "tag_4d-dress_ss.ply")
+        etchx_pred_raw = os.path.join(path_in, name, "tag_4d-dress_ss_raw.ply")
+
+        etchx_pred_mesh = trimesh.load(etchx_pred, process=False, maintain_order=True)
+        etchx_pred_raw_mesh = trimesh.load(etchx_pred_raw, process=False, maintain_order=True)
+
+        etchx_pred_mesh.export(os.path.join(path_in, name, "etchx_pred.obj"))
+        etchx_pred_raw_mesh.export(os.path.join(path_in, name, "etchx_pred_raw.obj"))
+        # continue
         # id_ = os.path.basename(scan).split('.')[0]
         id_ = name
         # print(id_)
@@ -253,7 +268,8 @@ def run(cfg: DictConfig) -> str:
         # Read input shape
         # scan_src = trimesh.load(scan, process=False, maintain_order=True)
         # input_points = np.load(scan)['hitpts']
-        input_points = np.load(scan)[input_type]
+        # input_points = np.load(scan)[input_type]
+        input_points = trimesh.load(scan).vertices
         scan_src = trimesh.PointCloud(input_points)
 
         Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
@@ -350,7 +366,9 @@ def run(cfg: DictConfig) -> str:
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
-        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+        # T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+        T.export(out_dir + "/vis/" + name + "/"  + "nicp_pred.obj")
+        continue
         # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
