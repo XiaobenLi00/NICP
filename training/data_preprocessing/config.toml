@@ -11,4 +11,4 @@ SMPL_DIR = "/home/lixiaoben/projects/NICP/datafolder/body_models/smplx_amass_loc
 AMASS_DATA = "/home/lixiaoben/projects/NICP/datafolder/AMASS/amass_smplx_n_npz"
 
 # Path to preprocessed data
-TARGET_DATA = "/home/lixiaoben/projects/NICP/datafolder/AMASS/out_nicp_smplx_n"
+TARGET_DATA = "/home/lixiaoben/projects/NICP/datafolder/AMASS/out_nicp_smplx_n_new"

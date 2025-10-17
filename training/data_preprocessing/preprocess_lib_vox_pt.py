@@ -156,7 +156,7 @@ def main(cfg):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data voxelization")
 
-    parser.add_argument("--exp", "-e", type=str, default='V1_SV1_T5', help="Experiment name")
+    parser.add_argument("--exp", "-e", type=str, default='AUG_1_1', help="Experiment name")
     parser.add_argument("--datasets", "-d", type=str, default='vald', nargs="+", choices=["train", "vald", "test"], help="Dataset name")
     parser.add_argument("--input_path", "-i", type=Path, default=Path('/mnt/sda/data_p/'), help="Path to input folder")
     parser.add_argument("--jobs", "-j", type=int, default=4, help="Number of parallel jobs")

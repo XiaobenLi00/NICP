@@ -34,7 +34,7 @@ from lvd_templ.paths import neutral_smplx_path, neutral_smpl_path
 bm_fname = neutral_smplx_path
 # bm_fname = neutral_smpl_path
 
-num_betas = 16  # number of body parameters
+num_betas = 10  # number of body parameters
 num_dmpls = 8  # number of DMPL parameters
 
 
@@ -67,11 +67,11 @@ class AMASSDataset(Dataset):
             self.locality = kwargs["locality"]
         else:
             self.locality = 0
-        self.useful_ids = (
-            pickle.load(open(kwargs["train_ids"], "rb"))
-            if self.mode == "train"
-            else pickle.load(open(kwargs["val_ids"], "rb"))
-        )
+        # self.useful_ids = (
+        #     pickle.load(open(kwargs["train_ids"], "rb"))
+        #     if self.mode == "train"
+        #     else pickle.load(open(kwargs["val_ids"], "rb"))
+        # )
 
         # Voxalization resolution
         self.occ_res = kwargs["res"]
@@ -153,12 +153,21 @@ class AMASSDataset(Dataset):
 
         # We take the length from betas
         # self.len = num_betas
-        self.len = len(self.useful_ids)
-        print(
-            "############ !!!!!!!!!!!!!!!!!! boqian info : self.len = {}".format(
-                self.len
-            )
+        print(os.path.join(self.path, str(mode), "betas.pt"))
+        b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
+        self.len = (
+            b.shape[0]
+            if kwargs["n_data"] == 0
+            else np.min((kwargs["n_data"], b.shape[0]))
         )
+        print(self.len)
+        del b
+        # self.len = len(self.useful_ids)
+        # print(
+        #     "############ !!!!!!!!!!!!!!!!!! boqian info : self.len = {}".format(
+        #         self.len
+        #     )
+        # )
 
     def __len__(self):
         return self.len
@@ -175,8 +184,7 @@ class AMASSDataset(Dataset):
                 "verts_" + str(self.type),
                 str(f"{int(idx):09}"),
             )
-            + ".pt",
-            weights_only=True,
+            + ".pt"
         )
 
         # Load the voxelization
@@ -185,7 +193,7 @@ class AMASSDataset(Dataset):
                 self.path,
                 str(self.mode),
                 "ifnet_indi",
-                self.type + "_" + str(self.occ_res),
+                self.type,
                 str(f"{int(idx):09}"),
             )
             + ".pt"

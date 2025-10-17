@@ -96,11 +96,11 @@ def dump_amass2pytroch(datasets, amass_dir, out_posepath, logger = None, rnd_see
             cdata_ids = np.random.choice(list(range(int(0.1*N), int(0.9*N),1)), int(keep_rate*0.8*N), replace=False)#removing first and last 10% of the data to avoid repetitive initial poses
             if len(cdata_ids)<1: continue
             data =  {k: cdata[k] for k in cdata.keys()}
-            data['betas'] =  torch.tensor(np.repeat(cdata['betas'][np.newaxis].astype(np.float32), repeats=len(cdata['poses']), axis=0))
+            data['betas'] =  torch.tensor(np.repeat(cdata['betas'][:10][np.newaxis].astype(np.float32), repeats=len(cdata['poses']), axis=0))
             data_pose.extend(cdata['poses'][cdata_ids].astype(np.float32))
             # data_dmpl.extend(cdata['dmpls'][cdata_ids].astype(np.float32))
             data_trans.extend(cdata['trans'][cdata_ids].astype(np.float32))
-            data_betas.extend(np.repeat(cdata['betas'][np.newaxis].astype(np.float32), repeats=len(cdata_ids), axis=0))
+            data_betas.extend(np.repeat(cdata['betas'][:10][np.newaxis].astype(np.float32), repeats=len(cdata_ids), axis=0))
             data_gender.extend([gdr2num[str(cdata['gender'].astype(str))] for _ in cdata_ids])
 
             bm = BodyModel(bm_fname=bm_fname, num_betas=num_betas).to(comp_device)
@@ -172,10 +172,10 @@ def prepare_amass(amass_splits, amass_dir, work_dir, logger=None):
     logger('Stage I: Fetch data from AMASS npz files')
     
 
-    # for split_name, datasets in amass_splits.items():
-    #     outpath = makepath(os.path.join(stageI_outdir, split_name, 'pose.pt'), isfile=True)
-    #     if os.path.exists(outpath): continue
-    #     dump_amass2pytroch(datasets, amass_dir, outpath, logger=logger)
+    for split_name, datasets in amass_splits.items():
+        outpath = makepath(os.path.join(stageI_outdir, split_name, 'pose.pt'), isfile=True)
+        if os.path.exists(outpath): continue
+        dump_amass2pytroch(datasets, amass_dir, outpath, logger=logger)
     
     logger('Done!')
     
@@ -189,7 +189,7 @@ def prepare_amass(amass_splits, amass_dir, work_dir, logger=None):
         pose = pytables.Float32Col(55*3)  # float  (single-precision)
         # dmpl = pytables.Float32Col(8)  # float  (single-precision)
         pose_matrot = pytables.Float32Col(55*9)  # float  (single-precision)
-        betas = pytables.Float32Col(16)  # float  (single-precision)
+        betas = pytables.Float32Col(10)  # float  (single-precision)
         trans = pytables.Float32Col(3)  # float  (single-precision)
         data_v = pytables.Float32Col(10475 * 3)  # float  (single-precision)
 
@@ -250,7 +250,7 @@ def prepare_amass(amass_splits, amass_dir, work_dir, logger=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AMASS dataset preparation')
     parser.add_argument('-c', "--config", type=str, default='config.toml', help='Path to config')
-    parser.add_argument("exp_code", type=str, default="AUG_1_1", help="Experiment code (VERSION_SUBVERSION_TRY)")
+    parser.add_argument("-e", "--exp_code", type=str, default="AUG_1_1", help="Experiment code (VERSION_SUBVERSION_TRY)")
     arguments = parser.parse_args()
 
     config = load_config(arguments.config)
@@ -264,7 +264,8 @@ if __name__ == '__main__':
 
 
     bm_fname = str(config["SMPL_DIR"] / "SMPLX_NEUTRAL.npz")
-    num_betas = 16 # number of body parameters
+    # num_betas = 16 # number of body parameters
+    num_betas = 10
     # num_dmpls = 8 # number of DMPL parameters
 
     gdr2num = {'male':-1, 'neutral':0, 'female':1}
@@ -286,7 +287,7 @@ if __name__ == '__main__':
 
     work_dir = makepath(str(config["TARGET_DATA"] / arguments.exp_code))
 
-    logger = log2file(os.path.join(work_dir, '%s.log' % (arguments.exp_code)))
+    logger = log2file(os.path.join(work_dir, '%s_new.log' % (arguments.exp_code)))
     logger('[%s] AMASS Data Preparation Began.'% arguments.exp_code)
     logger(msg)
 

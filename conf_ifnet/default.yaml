@@ -1,9 +1,9 @@
 # metadata specialised for each experiment
 core:
-  project_name: matchAMASS_CAPE # matchAMASS_4D-DRESS
+  project_name: matchAMASS # matchAMASS_4D-DRESS
   storage_dir: ${oc.env:PROJECT_ROOT}/storage
   version: 0.0.1
-  tags: cape  # 4d_dress
+  tags: amass_x  # 4d_dress
 
 defaults:
   - hydra: default

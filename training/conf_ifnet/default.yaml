@@ -1,6 +1,6 @@
 # metadata specialised for each experiment
 core:
-  project_name: matchAMASS
+  project_name: matchAMASS_x
   storage_dir: ${oc.env:PROJECT_ROOT}/storage
   version: 0.0.1
   tags: null

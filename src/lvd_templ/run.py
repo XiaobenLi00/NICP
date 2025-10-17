@@ -15,6 +15,9 @@ from nn_core.serialization import NNCheckpointIO
 import sys
 sys.path.append("/home/lixiaoben/projects/NICP/src")
 from lvd_templ.data.datamodule_AMASS import MetaData
+import warnings
+warnings.filterwarnings("ignore", message=".*weights_only=False.*")
+
 
 #######
 

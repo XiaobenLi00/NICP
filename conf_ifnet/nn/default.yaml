@@ -4,21 +4,21 @@ data:
   gpus: ${train.trainer.gpus}
 
   datasets:
-    version: CAPE # 4D-DRESS 
+    version: AUG_1_1 # 4D-DRESS 
     n_data: 0
     n_points: 0 
     template: False
     red_factor: 10
     type: occ_dist
     res: 64
-    train_ids: "/home/lixiaoben/projects/NICP/datafolder/useful_data_cape/train_ids.pkl" # '/home/lixiaoben/projects/NICP/datafolder/useful_data_4d-dress/train_ids.pkl'
-    val_ids: "/home/lixiaoben/projects/NICP/datafolder/useful_data_cape/val_ids.pkl" # '/home/lixiaoben/projects/NICP/datafolder/useful_data_4d-dress/val_ids_sampled_ratio10.pkl'
+    # train_ids: "/home/lixiaoben/projects/NICP/datafolder/useful_data_cape/train_ids.pkl" # '/home/lixiaoben/projects/NICP/datafolder/useful_data_4d-dress/train_ids.pkl'
+    # val_ids: "/home/lixiaoben/projects/NICP/datafolder/useful_data_cape/val_ids.pkl" # '/home/lixiaoben/projects/NICP/datafolder/useful_data_4d-dress/val_ids_sampled_ratio10.pkl'
 
     train:
       _target_: lvd_templ.data.dataset_AMASS_occ.AMASSDataset
       version:  ${nn.data.datasets.version}
       n_data:   ${nn.data.datasets.n_data}
-      data_path: "/mnt/sdb/out_AMASS/"        #TODO: update path to the processed data
+      data_path: "/home/lixiaoben/projects/NICP/datafolder/AMASS/out_nicp_smplx_n_new/"        #TODO: update path to the processed data
       n_points: ${nn.data.datasets.n_points} 
       template: ${nn.data.datasets.template}
       seed_idxs: 0
@@ -31,8 +31,8 @@ data:
       v_locality: 0
       segm: ${nn.module.segm}
       coeffs: False
-      train_ids: ${nn.data.datasets.train_ids}
-      val_ids: ${nn.data.datasets.val_ids}
+      # train_ids: ${nn.data.datasets.train_ids}
+      # val_ids: ${nn.data.datasets.val_ids}
       
   num_workers:
     train: 24
@@ -48,7 +48,8 @@ data:
 module:
   _target_: lvd_templ.pl_modules.pl_module_ifnet.LightUniversal
   paradigm: LoVD
-  smpl_path: "./support_data/body_models/smplh/neutral/model.npz"
+  # smpl_path: "./support_data/body_models/smplh/neutral/model.npz"
+  smpl_path: "/home/lixiaoben/projects/NICP/datafolder/body_models/smplx_amass_lockedhead/SMPLX_NEUTRAL.npz"
   n_basis: 20
   n_desc: 40
   n_layers: 10

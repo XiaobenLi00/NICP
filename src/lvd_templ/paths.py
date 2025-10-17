@@ -11,7 +11,8 @@ path_challenge_pairs = "./src/lvd_templ/evaluation/train_challenge.txt"
 
 ##########
 neutral_smpl_path = "./support_data/body_models/smplh/neutral/model.npz"
-neutral_smplx_path = "./support_data/body_models/smplx/SMPLX_NEUTRAL.npz"
+# neutral_smplx_path = "./support_data/body_models/smplx/SMPLX_NEUTRAL.npz"
+neutral_smplx_path = "/home/lixiaoben/projects/NICP/datafolder/body_models/smplx_amass_lockedhead/SMPLX_NEUTRAL.npz"
 
 output_dir = "./output/"
 chk_pts = "./storage/"

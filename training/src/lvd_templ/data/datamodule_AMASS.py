@@ -14,7 +14,7 @@ from torch.utils.data.dataloader import default_collate
 from pathlib import Path
 
 ## CHANGE PATH TO THE CURRENT FOLDER
-PROJECT_ROOT = Path("/mnt/sda/NICP_TRAIN/")
+PROJECT_ROOT = Path("/home/lixiaoben/projects/NICP")
 
 from nn_core.nn_types import Split
 

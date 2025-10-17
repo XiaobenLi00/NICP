@@ -2,12 +2,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+import functools
 
 #############
 
-# Contains:
-# - The NN models
-
+#  NN models
 
 class PointNetfeat(nn.Module):
     def __init__(self, n_in=3, n_layers=4, size_layers=128, global_feat=True, feature_transform=False, normalize=False):
@@ -44,6 +44,8 @@ class PointNetfeat(nn.Module):
 
     def forward(self, x):
         n_pts = x.size()[2]
+        # if(self.normalize):
+        #     x = geometry.normalize_positions(x)
 
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
@@ -108,48 +110,6 @@ class PointNetBasis(nn.Module):
 
 #############
 
-
-class TemplateNet(nn.Module):
-    def __init__(self, n_points=1000, n_basis=20, batch_norm=False):
-        super(TemplateNet, self).__init__()
-        self.batch_norm = batch_norm
-        self.n_basis = n_basis
-
-        self.n_points = n_points
-        self.dense_list = [1024, 512, 256, 512, 1024]
-        self.dense_layers = []
-        self.bn_layers = []
-
-        self.dense_layers.append(torch.nn.Linear(n_points * 3, self.dense_list[0]).cuda())
-
-        if batch_norm:
-            self.bn_layers.append(nn.BatchNorm1d(self.dense_list[0]).cuda())
-
-        for i in range(len(self.dense_list[1:])):
-            self.dense_layers.append(torch.nn.Linear(self.dense_list[i - 1], self.dense_list[i]).cuda())
-            if batch_norm:
-                self.bn_layers.append(nn.BatchNorm1d(self.dense_list[i]).cuda())
-
-        self.dense_layers.append(torch.nn.Linear(self.dense_list[i], n_points * 20).cuda())
-
-    def forward(self, x):
-        x = x.reshape(-1, self.n_points * x.shape[1])
-
-        for i in range(len(self.dense_layers) - 1):
-            x = self.dense_layers[i](x)
-            if self.batch_norm:
-                x = self.bn_layers[i](x)
-
-        x = self.dense_layers[-1](x)
-
-        x = x.reshape(-1, self.n_points, self.n_basis)
-        return x, None, None
-
-
-#############
-import numpy as np
-
-
 class PointNetGlob(nn.Module):
     def __init__(
         self,
@@ -177,7 +137,7 @@ class PointNetGlob(nn.Module):
         self.conv3 = torch.nn.Conv1d(64, 64, 1)
         self.conv4 = torch.nn.Conv1d(64, 128, 1)
         self.conv41 = torch.nn.Conv1d(128, size_layers, 1)
-
+        # self.conv42 = torch.nn.Conv1d(128, 128, 1)
         self.convs = []
         self.bn = []
         for i in range(0, n_layers):
@@ -244,6 +204,7 @@ class PointNetGlob(nn.Module):
         self.feats = x
 
     def query(self, x):
+        # x = (x - self.b_min)/self.bb*2 - 1
         _B, _numpoints, _ = x.shape
 
         normalized_p = x
@@ -261,7 +222,6 @@ class PointNetGlob(nn.Module):
 
 
 ########################
-import functools
 
 class NetworkBase(nn.Module):
     def __init__(self):
@@ -316,11 +276,7 @@ class Network_LVD(NetworkBase):
         self.bb = self.b_max - self.b_min
         self.selfsup = selfsup
         self.output_dim = output_dim
-        # if power_feat:
-        #     self.conv_1 = nn.utils.weight_norm(nn.Conv3d(input_dim, 32, 3, stride=2, padding=1))  # out: 32
-            
-            
-            
+
         # else:
         self.conv_1 = nn.utils.weight_norm(nn.Conv3d(input_dim, 32, 3, stride=2, padding=1))  # out: 32
         self.conv_1_1 = nn.utils.weight_norm(nn.Conv3d(32, 32, 3, padding=1))  # out: 32
@@ -436,11 +392,11 @@ class Network_LVD(NetworkBase):
         return f1
 #################################
 
-class Network_LVD_PowerUP(NetworkBase):
+class Network_LoVD(NetworkBase):
     def __init__(self, hidden_dim=512, output_dim=6890, res=128, input_dim=1, 
                  b_min = np.array([-1.2, -1.4, -1.2]), b_max = np.array([1.2, 1.3, 1.2]), 
                  paradigm='LVD',selfsup=False, segm=0, labels=[], unsup=False, device='cuda'):
-        super(Network_LVD_PowerUP, self).__init__()
+        super(Network_LoVD, self).__init__()
         self._name = 'voxel_encoder'
         self.res = res 
         self.paradigm = paradigm
@@ -452,9 +408,7 @@ class Network_LVD_PowerUP(NetworkBase):
         self.segm = segm
         self.labels = labels 
         self.unsup = unsup 
-        
-                # torch.Size([4, 13, 64, 64, 64])      
-        # else:
+           
         self.conv_1 = nn.utils.weight_norm(nn.Conv3d(input_dim, 32*2, 3, stride=2, padding=1))  # out: 32
         self.conv_1_1 = nn.utils.weight_norm(nn.Conv3d(32*2, 32*2, 3, padding=1))  # out: 32
         self.conv_2 = nn.utils.weight_norm(nn.Conv3d(32*2, 64*2, 3, padding=1))  # out: 16
@@ -476,9 +430,6 @@ class Network_LVD_PowerUP(NetworkBase):
             feature_size = (3 + input_dim + 32 + 64 + 96 + 128 + 128 + 128 + 128)
         else:
             feature_size = (3 + input_dim + 32*2 + 64*2 + 96*2 + 128*2 + 128*2 + 128*2)
-        
-        
-        
         
         if segm==0:    
             self.fc_0 = nn.utils.weight_norm(nn.Conv1d(feature_size, hidden_dim, 1))
@@ -535,50 +486,6 @@ class Network_LVD_PowerUP(NetworkBase):
             if i<len(self.layers_first)-1:
                 x = self.maxpool(x)
             
-        # features0 = x
-        
-        # x = self.actvn(self.conv_1(x))
-        # x = self.actvn(self.conv_1_1(x))
-        # features1 = x
-        # x = self.maxpool(x)
-
-        # x = self.actvn(self.conv_2(x))
-        # x = self.actvn(self.conv_2_1(x))
-        # features2 = x
-        # x = self.maxpool(x)
-
-        # x = self.actvn(self.conv_3(x))
-        # x = self.actvn(self.conv_3_1(x))
-        # features3 = x
-        # x = self.maxpool(x)
-
-        # x = self.actvn(self.conv_4(x))
-        # x = self.actvn(self.conv_4_1(x))
-        # features4 = x
-        # x = self.maxpool(x)
-
-        # x = self.actvn(self.conv_5(x))
-        # x = self.actvn(self.conv_5_1(x))
-        # features5 = x
-        # x = self.maxpool(x)
-
-        # if self.res == 128:
-        #     x = self.actvn(self.conv_6(x))
-        #     x = self.actvn(self.conv_6_1(x))
-        #     features6 = x
-        #     x = self.maxpool(x)
-
-        #     x = self.actvn(self.conv_7(x))
-        #     x = self.actvn(self.conv_7_1(x))
-        #     features7 = x
-
-        #     self.features = [features0, features1, features2, features3, features4, features5, features6, features7]
-        
-        # if self.res == 64:
-        #     x = self.actvn(self.conv_7(x))
-        #     x = self.actvn(self.conv_7_1(x))
-        #     features7 = x
-
         self.features = [features[i] for i in range(len(features))]
                     
     def query(self, p, labels=[]):
@@ -628,152 +535,8 @@ class Network_LVD_PowerUP(NetworkBase):
         f1 = self.fc_ss_out(f1)
         
         return f1
-##################
-
-
-class Network_LVD_PowerUP2(NetworkBase):
-    def __init__(self, hidden_dim=512, output_dim=6890, res=128, input_dim=1, 
-                 b_min = np.array([-1.2, -1.4, -1.2]), b_max = np.array([1.2, 1.3, 1.2]), 
-                 paradigm='LVD',selfsup=False, power_factor = 5, device='cuda'):
-        super(Network_LVD_PowerUP2, self).__init__()
-        self._name = 'voxel_encoder'
-        self.res = res 
-        self.paradigm = paradigm
-        self.b_min = torch.FloatTensor(b_min).to(device)
-        self.b_max = torch.FloatTensor(b_max).to(device)
-        self.bb = self.b_max - self.b_min
-        self.selfsup = selfsup
-        self.output_dim = output_dim
-
-
-                # torch.Size([4, 13, 64, 64, 64])
-        factor = power_factor        
-        # else:
-        self.conv_1 = nn.utils.weight_norm(nn.Conv3d(input_dim, 32*factor, 3, stride=2, padding=1))  # out: 32
-        self.conv_1_1 = nn.utils.weight_norm(nn.Conv3d(32*factor, 32*factor, 3, padding=1))  # out: 32
-        self.conv_2 = nn.utils.weight_norm(nn.Conv3d(32*factor, 64*factor, 3, padding=1))  # out: 16
-        self.conv_2_1 = nn.utils.weight_norm(nn.Conv3d(64*factor, 64*factor, 3, padding=1))  # out: 16
-        self.conv_3 = nn.utils.weight_norm(nn.Conv3d(64*factor, 96*factor, 3, padding=1))  # out: 8
-        self.conv_3_1 = nn.utils.weight_norm(nn.Conv3d(96*factor, 96*factor, 3, padding=1))  # out: 8
-        self.conv_4 = nn.utils.weight_norm(nn.Conv3d(96*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_4_1 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_5 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_5_1 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_6 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_6_1 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_7 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-        self.conv_7_1 = nn.utils.weight_norm(nn.Conv3d(128*factor, 128*factor, 3, padding=1))  # out: 8
-
-        if res == 128:
-            feature_size = (3 + input_dim + 32 + 64 + 96 + 128 + 128 + 128 + 128)
-        else:
-            feature_size = (3 + input_dim + 32*factor + 64*factor + 96*factor + 128*factor + 128*factor + 128*factor)
-            
-        self.fc_0 = nn.utils.weight_norm(nn.Conv1d(feature_size, hidden_dim, 1))
-        self.fc_1 = nn.utils.weight_norm(nn.Conv1d(hidden_dim, hidden_dim*2, 1))
-        self.fc_2 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-        self.fc_3 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-        self.fc_4 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-        self.fc_out = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, output_dim, 1))
-        self.actvn = nn.ReLU()
-
-        self.maxpool = nn.MaxPool3d(2)
-        
-        if self.selfsup == True:
-            self.fc_ss_0 = nn.utils.weight_norm(nn.Linear(128, hidden_dim))
-            self.fc_ss_1 = nn.utils.weight_norm(nn.Linear(hidden_dim, hidden_dim*2))
-            self.fc_ss_2 = nn.utils.weight_norm(nn.Linear(hidden_dim*2, hidden_dim*2))
-            self.fc_ss_3 = nn.utils.weight_norm(nn.Linear(hidden_dim*2, hidden_dim*2))
-            self.fc_ss_4 = nn.utils.weight_norm(nn.Linear(hidden_dim*2, hidden_dim*2))            
-            self.fc_ss_out = nn.utils.weight_norm(nn.Linear(hidden_dim*2, self.output_dim))  
-            #self.fc_ss_out = nn.utils.weight_norm(nn.Linear(hidden_dim*2, 256))
-            
-        self.layers_first = [self.conv_1,
-                        self.conv_2, self.conv_3, self.conv_4, 
-                        self.conv_5, self.conv_7]
-        
-        self.layers_second = [self.conv_1_1,
-                        self.conv_2_1, self.conv_3_1, self.conv_4_1, 
-                        self.conv_5_1, self.conv_7_1]
-                    
-    def forward(self, x):
-        features = [] 
-        features.append(x)
-        for i in range(len(self.layers_first)):
-            x = self.actvn(self.layers_first[i](x))
-            x = self.actvn(self.layers_second[i](x))
-            features.append(x)
-            if i<len(self.layers_first)-1:
-                x = self.maxpool(x)
-
-        self.features = [features[i] for i in range(len(features))]
-                    
-    def query(self, p):
-        _B, _numpoints, _ = p.shape
-
-        normalized_p = (p - self.b_min)/self.bb*2 - 1
-        point_features = normalized_p.permute(0, 2, 1)
-        for j, feat in enumerate(self.features):
-            interpolation = F.grid_sample(feat, normalized_p.unsqueeze(1).unsqueeze(1), align_corners=False).squeeze(2).squeeze(2)
-            point_features = torch.cat((point_features, interpolation), 1)
-
-        point_features = self.actvn(self.fc_0(point_features))
-        point_features = self.actvn(self.fc_1(point_features))
-        point_features = self.actvn(self.fc_2(point_features))
-        point_features = self.actvn(self.fc_3(point_features))
-        point_features = self.actvn(self.fc_4(point_features))
-        point_features = self.fc_out(point_features)
-
-        return point_features
-
-    def self_sup(self):
-        f1 = self.actvn(self.fc_ss_0(torch.squeeze(self.features[6])))
-        f1 = self.actvn(self.fc_ss_1(f1))
-        f1 = self.fc_ss_2(f1)
-        f1 = self.fc_ss_3(f1)
-        f1 = self.fc_ss_4(f1)
-        f1 = self.fc_ss_out(f1)
-        
-        return f1
-
-
-
-
-# class PointNetLVD(nn.Module):
-#     def __init__(self, n_basis = 20,n_layers=4, size_layers=128, n_in = 3, normalize = False, feature_transform=False):
-#         super(PointNetLVD, self).__init__()
-#         self.k = n_basis
-#         self.feature_transform = feature_transform
-#         self.feat = PointNetfeat(n_in = n_in,n_layers=n_layers,size_layers=size_layers,normalize = False, global_feat=False, feature_transform=feature_transform)
-
-#         hidden_dim=2048
-#         output_dim=500*3
-#         self.fc_0 = nn.utils.weight_norm(nn.Conv1d(256, hidden_dim, 1))
-#         self.fc_1 = nn.utils.weight_norm(nn.Conv1d(hidden_dim, hidden_dim*2, 1))
-#         self.fc_2 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-#         self.fc_3 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-#         self.fc_4 = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, hidden_dim*2, 1))
-#         self.fc_out = nn.utils.weight_norm(nn.Conv1d(hidden_dim*2, output_dim, 1))
-#         self.actvn = nn.ReLU()
-
-#     def forward(self, x):
-#         _B, _numpoints, _ = x.shape
-
-#         normalized_p = x
-#         point_features = normalized_p.permute(0, 2, 1)
-#         point_features = torch.cat([point_features, self.feats], 1)
-
-#         point_features = self.actvn(self.fc_0(point_features))
-#         point_features = self.actvn(self.fc_1(point_features))
-#         point_features = self.actvn(self.fc_2(point_features))
-#         point_features = self.actvn(self.fc_3(point_features))
-#         point_features = self.actvn(self.fc_4(point_features))
-#         point_features = self.fc_out(point_features)
-
-#         return point_features
-
-
-#############
+    
+    
 #############
 #############
 
@@ -844,16 +607,6 @@ class IFNetPC(nn.Module):
         feature_1 = F.grid_sample(
             net, p, padding_mode="border", align_corners=True
         )  # out : (B,C (of x), 1,1,sample_num)
-
-        # net_diffuse = net.clone()
-        # for i, occ in zip(torch.arange(net.shape[0]),x):
-        #     for j in torch.arange(net.shape[1]):
-        #         for t in torch.arange(3 q):
-        #             net_diffuse[i,j,:,:,:] = diffuse_heat(net_diffuse[i,j,:,:,:],occ,1)
-
-        # #diffuse_heat(u_delta_t, occup, delta_t):
-
-        # net = self.maxpool((net + net_diffuse)/2)
 
         net = self.actvn(self.conv_0(net))
         net = self.actvn(self.conv_0_1(net))
