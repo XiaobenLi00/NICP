@@ -13,10 +13,12 @@ import trimesh
 import gc
 import pickle
 import sys
+import json
 
 sys.path.append("/home/lixiaoben/projects/NICP")
 sys.path.append("/home/lixiaoben/projects/NICP/src")
 from utils_cop.prior import MaxMixturePrior
+from hand_sampling_toolkit import sample_points_near_hands
 
 # from utils_cop.SMPL import SMPL
 from smplx import SMPLX
@@ -128,6 +130,21 @@ def get_model(chk):
 
 # Main Method to register all the shapes in a folder
 def run(cfg: DictConfig) -> str:
+
+    # with open("src/lvd_templ/evaluation/smplx_vert_segmentation.json", "r") as f:
+    with open("/home/lixiaoben/projects/NICP/src/lvd_templ/evaluation/smplx_vert_segmentation.json", "r") as f:
+        smplx_seg = json.load(f)
+    body_parts = list(smplx_seg.keys())  # 27个部位
+    # print(body_parts)
+    # print(len(body_parts))
+    # 合并rightHand和rightHandIndex1的顶点索引，去重
+    right_hand = list(set(smplx_seg["rightHand"] + smplx_seg["rightHandIndex1"]))
+    # 合并leftHand和leftHandIndex1的顶点索引，去重
+    left_hand = list(set(smplx_seg["leftHand"] + smplx_seg["leftHandIndex1"]))
+    # 合并左右手所有顶点，去重
+    two_hands = list(set(right_hand + left_hand))
+    # print(len(two_hands)) # 1556
+    # exit()
     os.chdir(home_dir)
 
     # Recovering the parameters of the run
@@ -143,9 +160,9 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_gen_hitpts'
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
-    # input_type = "pred_inner_points"
-    input_type = "hitpts"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_lovd_amass"
+    input_type = "pred_inner_points"
+    # input_type = "hitpts"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_lovd_amass_hands_refine"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
     # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
@@ -173,7 +190,7 @@ def run(cfg: DictConfig) -> str:
         # scans = sorted(glob.glob(os.path.join(path_in, "*.obj")))
     # print(f"number of scans: {len(scans)}")
     # exit()
-
+    gt_scan_folder = "datafolder_new/CAPE_reorganized/cape_release/model_reorganized"
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
     scans_part1 = scans[: len(scans) // 4]
     scans_part2 = scans[len(scans) // 4: len(scans) // 2]
@@ -355,6 +372,8 @@ def run(cfg: DictConfig) -> str:
             module, gt_points, voxel_src, iters=cfg["lvd"].iters, init=init
         )
 
+        reg_src_raw = reg_src.copy()
+
         # apply inv_Rx, trasl, scale to the reg_src
         reg_src = reg_src * scale + trasl
         reg_src = transformations.transform_points(reg_src, inv_Rx)
@@ -448,7 +467,87 @@ def run(cfg: DictConfig) -> str:
         #     T = trimesh.Trimesh(vertices = smpld_vertices, faces = faces)
         #     out_name_grid = out_name + '_+D'
         #     export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name_grid + '.ply')
+
+        gt_scan_path = os.path.join(gt_scan_folder, name, f"{name}.obj")
+        assert os.path.isfile(gt_scan_path)
+        gt_scan_mesh = trimesh.load_mesh(
+            gt_scan_path, maintain_order=True, process=False
+        )
+        gt_scan_vertices = gt_scan_mesh.vertices
+
+        gt_scan_min_xyz = np.min(gt_scan_vertices, axis=0)
+        gt_scan_max_xyz = np.max(gt_scan_vertices, axis=0)
+        gt_scan_center = (gt_scan_min_xyz + gt_scan_max_xyz) / 2.0
+        gt_scan_vertices = gt_scan_vertices - gt_scan_center
+        gt_scan_mesh.vertices = gt_scan_vertices
+        gt_scan_mesh.export(os.path.join(out_dir, "vis", name, f"gt_scan_mesh.obj"))
+
+        hand_points, indices, distances = sample_points_near_hands(
+            scan_points=gt_scan_vertices,        # 扫描点云 (N, 3)
+            smplx_vertices=out_s,  # SMPLX顶点 (10475, 3)
+            radius=0.15,                    # 15cm半径
+            hands_index =two_hands,                    # 双手
+            method='radius'                 # 半径采样
+        )
+        input_points = np.concatenate([input_points, hand_points], axis=0)
+        scan_src = trimesh.PointCloud(input_points)
+
+        Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
+        inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
+
+        scan_src.apply_transform(Rx)
+        voxel_src, mesh_src, scale, trasl = vox_scan(
+            scan_src, res, style=data_type, grad=grad
+        )
+        export_mesh(
+            mesh_src.copy(),
+            inv_Rx,
+            trasl,
+            scale,
+            out_dir + "/vis/" + name + "/aligned_refine.ply",
+        )
+        if cfg["core"].ss_ref:
+            del module, train_data
+            module, MD, train_data, cfg_model = get_model(chk)
+            out_name = out_name + "_refine"
+            et = time.time()
+            module.train()
+            selfsup_ref(
+                module,
+                torch.tensor(np.asarray(scan_src.vertices)),
+                voxel_src,
+                gt_points,
+                steps=cfg["core"].steps_ss,
+                lr_opt=cfg["core"].lr_ss,
+            )
+            module.eval()
+        # init = torch.tensor(out_s[gt_idxs], dtype=torch.float32).unsqueeze(0).cuda()
+        init = torch.tensor(reg_src_raw, dtype=torch.float32).unsqueeze(0).cuda()
+        reg_src = fit_LVD(
+            module, gt_points, voxel_src, iters=cfg["lvd"].iters, init=init
+        )
+        reg_src = reg_src * scale + trasl
+        reg_src = transformations.transform_points(reg_src, inv_Rx)
+        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        params_np = {}
+        for p in params.keys():
+            params_np[p] = params[p].detach().cpu().numpy()
+
+        np.savez(
+            out_dir + "/vis/" + name + "/pred_smplx_info_hands_refine_before_cham_refine.npz",
+            pose=params_np["pose"][:, 3:].reshape(-1, 3),
+            betas=params_np["beta"].reshape(10),
+            global_orient=params_np["pose"][:, :3].reshape(3),
+            transl=params_np["trans"].reshape(3),
+            joints=params_np["joints"].reshape(-1, 3),
+            expression=params_np["expression"].reshape(10),
+        )
+
+        T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
+        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+
         gc.collect()
+        # break
 
 
 @hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_cape")

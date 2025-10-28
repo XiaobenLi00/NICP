@@ -1,15 +1,15 @@
 # metadata specialised for each experiment
 core:
-  checkpoint: matchAMASS_CAPE
+  checkpoint: matchAMASS
   tag: 'cape'
   challenge: demo
-  cham_ref: True
+  cham_ref: False
   cham_bidir: 0
   ss_ref: True
   overwrite: False
   steps_ss: 20
   lr_ss: 0.00001
-  plusD: True
+  plusD: False
   #method: Uni
   init: False
   lvdcham: False

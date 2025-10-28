@@ -13,10 +13,12 @@ import trimesh
 import gc
 import pickle
 import sys
+import json
 
 sys.path.append("/home/lixiaoben/projects/NICP")
 sys.path.append("/home/lixiaoben/projects/NICP/src")
 from utils_cop.prior import MaxMixturePrior
+from hand_sampling_toolkit import sample_points_near_hands
 
 # from utils_cop.SMPL import SMPL
 from smplx import SMPLX
@@ -84,10 +86,9 @@ def export_mesh(T, r, t, s, path):
 def get_model(chk):
     # Recovering the Path to the checkpoint
     # chk_zip = glob.glob(chk + "checkpoints/*.zip")[0]
-    # chk_zip = "./storage/matchAMASS_CAPE/checkpoints/epoch=77-step=253577_x.ckpt.zip"
-    # chk_zip = "datafolder_new/CutPartial_CAPE/epoch=68-step=224318.ckpt.zip"
-    # chk_zip = "datafolder_new/SingleView_CAPE/epoch=76-step=250326.ckpt.zip"
-    # chk_zip = "/home/public/NICP_gen/gen_train_cape_validate/epoch=78-step=149862.ckpt.zip"
+    # chk_zip = (
+    #     "./storage/matchAMASS_4D-DRESS/checkpoints/epoch=79-step=593999_x.ckpt.zip"
+    # )
     chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
@@ -95,21 +96,18 @@ def get_model(chk):
     # Restoring the network configurations using the Hydra Settings
     tmp = hydra.core.global_hydra.GlobalHydra.instance().clear()
     tmp = initialize(config_path="../../../" + str(chk))
-    # tmp = initialize(config_path="../../" + str(chk))
     cfg_model = compose(config_name="config")
 
     # Recovering the metadata
+    # print(cfg_model.nn.data.datasets.train)
     # cfg_model.nn.data.datasets.train["train_ids"] = (
-    #     "datafolder_new/useful_data_cape/train_ids.pkl"
+    #     "datafolder_new/useful_data_4d-dress/train_ids.pkl"
     # )
     # cfg_model.nn.data.datasets.train["val_ids"] = (
-    #     "datafolder_new/useful_data_cape/val_ids.pkl"
+    #     "datafolder_new/useful_data_4d-dress/val_ids_sampled_ratio10.pkl"
     # )
-    # print(cfg_model.nn.data.datasets.train)
-    # exit()
     train_data = hydra.utils.instantiate(cfg_model.nn.data.datasets.train, mode="test")
     MD = MetaData(class_vocab=train_data.class_vocab)
-    # print(train_data.class_vocab)
 
     # Instantiating the correct nentwork
     model: pl.LightningModule = hydra.utils.instantiate(
@@ -119,8 +117,6 @@ def get_model(chk):
     # Restoring the old checkpoint
     old_checkpoint = NNCheckpointIO.load(path=chk_zip)
     module = model._load_model_state(checkpoint=old_checkpoint, metadata=MD).to(device)
-    # print(module)
-    # exit()
     module.model.eval()
 
     return module, MD, train_data, cfg_model
@@ -128,6 +124,20 @@ def get_model(chk):
 
 # Main Method to register all the shapes in a folder
 def run(cfg: DictConfig) -> str:
+    # with open("src/lvd_templ/evaluation/smplx_vert_segmentation.json", "r") as f:
+    with open("/home/lixiaoben/projects/NICP/src/lvd_templ/evaluation/smplx_vert_segmentation.json", "r") as f:
+        smplx_seg = json.load(f)
+    body_parts = list(smplx_seg.keys())  # 27个部位
+    # print(body_parts)
+    # print(len(body_parts))
+    # 合并rightHand和rightHandIndex1的顶点索引，去重
+    right_hand = list(set(smplx_seg["rightHand"] + smplx_seg["rightHandIndex1"]))
+    # 合并leftHand和leftHandIndex1的顶点索引，去重
+    left_hand = list(set(smplx_seg["leftHand"] + smplx_seg["leftHandIndex1"]))
+    # 合并左右手所有顶点，去重
+    two_hands = list(set(right_hand + left_hand))
+    # print(len(two_hands)) # 1556
+    # exit()
     os.chdir(home_dir)
 
     # Recovering the parameters of the run
@@ -140,50 +150,35 @@ def run(cfg: DictConfig) -> str:
         os.mkdir(out_folder + model_name)
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
-    # out_dir = out_folder + model_name + '/' + 'cape_gen_hitpts'
-    # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
+    input_type = "pred_inner_points"
+    # input_type = "hitpts"
+    out_dir = (
+        out_folder + model_name + "/" + f"4d-dress_{input_type}_79_x_lovd_amass_hands_refine"
+    )
 
-    # input_type = "pred_inner_points"
-    input_type = "hitpts"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_lovd_amass"
-    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
-    # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
     if not (os.path.exists(out_dir + "/vis")):
         os.mkdir(out_dir + "/vis")
 
-    # path_in = "datafolder/CAPE_reorganized/cape_release/eval_outputs/cape_epoch_32_test"
-    path_in = (
-        "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
-    )
-    # path_in = "output/matchAMASS_CAPE/test"
-    # path_in = "datafolder_new/CutPartial_CAPE/cape_55f_partial_raw"
-    # path_in = "datafolder_new/SingleView_CAPE/cape_55f_singleview_raw"
-    assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
-
     # Recover Data Path
     # path_in = get_dataset(cfg['core'].challenge)
-    # path_in = '/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/model_ratio20_from_PTF/'
+    # path_in = '/home/boqian/code/NICP/datafolder/4D-DRESS/data_processed/model'
+    path_in = "datafolder_new/4D-DRESS/data_reorganized/epoch_37_eval/vis"
+
+    assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
 
     # How the data are organized
     if cfg["core"].challenge in ("demo", "demo_guess_rot"):
         # all_scans = glob.glob(os.path.join(path_in, '*/*.obj'))
         scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
-        # scans = sorted(glob.glob(os.path.join(path_in, "*.obj")))
-    # print(f"number of scans: {len(scans)}")
-    # exit()
-
-    # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
+    # scans = sorted(np.load(out_dir + "/remaining_scans.npy"))
+    gt_scan_folder = "datafolder_new/4D-DRESS/data_reorganized/model"
     scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4: len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4:]
+    scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
+    scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
+    scans_part4 = scans[3 * len(scans) // 4 :]
     scans = scans_part4
-    # filtering and sampling with ratio=4
-    # print("start filtering scans with eval ids")
-    # eval_ids = ['00122', '00159', '00215']
-    # Get all existing output directories
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")
@@ -196,16 +191,18 @@ def run(cfg: DictConfig) -> str:
     #         filtered_scans.append(scan)
     # print(f"number of remaining scans: {len(filtered_scans)}")
     # scans = filtered_scans
-
-    # # np.save(out_dir + '/scans_part1.npy', scans_part1)
-    # # np.save(out_dir + '/scans_part2.npy', scans_part2)
-    # # scans = np.load(out_dir + '/scans_part2.npy')
     # np.save(out_dir + '/remaining_scans.npy', scans)
     # exit()
 
-    # scans = sorted([scan for scan in all_scans if os.path.basename(scan)[:5] in eval_ids])
+    # filtering and sampling with ratio=4
+    # print("start filtering scans with eval ids")
+    # eval_ids = pickle.load(open("/home/boqian/code/NICP/datafolder/useful_data_4d-dress/val_ids_sampled_ratio10.pkl", "rb"))
+    # # print(os.path.basename(all_scans[0]).split('.')[0][10:])
+
+    # scans = sorted([scan for scan in all_scans if os.path.basename(scan).split('.')[0] in eval_ids])
+    # # divide scans into two parts
+
     print(f"number of target eval scans: {len(scans)}")
-    # print(f"number of filtered target eval scans: {len(filtered_scans)}")
     # exit()
 
     print("--------------------------------------------")
@@ -220,13 +217,6 @@ def run(cfg: DictConfig) -> str:
     # else:
     alpha = np.pi/2
     # alpha = 0
-    # Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
-    # inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
-
-    # print(Rx)
-    # print(inv_Rx)
-
-    # exit()
 
     ### Get SMPL model
     # SMPL_model = SMPL('neutral_smpl_with_cocoplus_reg.txt', obj_saveable = True).cuda()
@@ -254,17 +244,16 @@ def run(cfg: DictConfig) -> str:
         print(f"Start :{scan}")
 
         # Basic Name --> You can add "tag" if you want to differentiate the runs
-        out_name = cfg["core"].tag
+        out_name = "out" + cfg["core"].tag
 
         # Scans name format
         # if(cfg['core'].challenge == 'demo'):
         #     name = os.path.basename(os.path.dirname(scan))
         # else:
         name = os.path.basename(scan)[23:-4]
-        # name = os.path.basename(scan)[:-4]
+        # id_ = os.path.basename(scan).split('.')[0]
         id_ = name
         # print(id_)
-        # exit()
         smplx_model_path = "datafolder_new/body_models/smplx/SMPLX_NEUTRAL.pkl"
         smplx_model = SMPLX(
             model_path=smplx_model_path,
@@ -281,7 +270,7 @@ def run(cfg: DictConfig) -> str:
 
         # Read input shape
         # scan_src = trimesh.load(scan, process=False, maintain_order=True)
-        # input_points = np.load(scan)['pred_inner_points']
+        # input_points = np.load(scan)['hitpts']
         input_points = np.load(scan)[input_type]
         scan_src = trimesh.PointCloud(input_points)
 
@@ -293,7 +282,6 @@ def run(cfg: DictConfig) -> str:
         voxel_src, mesh_src, scale, trasl = vox_scan(
             scan_src, res, style=data_type, grad=grad
         )
-        # print(f"scale: {scale}, trasl: {trasl}")
 
         # Save algined mesh
         if not (os.path.exists(out_dir + "/vis/" + name)):
@@ -303,13 +291,6 @@ def run(cfg: DictConfig) -> str:
             trasl = trasl * 0
             scale = 1
             inv_Rx = np.eye(4)
-        # export_mesh(
-        #     mesh_src.copy(),
-        #     np.eye(4),
-        #     trasl * 0,
-        #     1,
-        #     out_dir + "/vis/" + name + "/aligned_raw.ply",
-        # )
 
         export_mesh(
             mesh_src.copy(),
@@ -346,7 +327,7 @@ def run(cfg: DictConfig) -> str:
                     np.asarray(mesh_src.vertices[picker]), dtype=torch.float32
                 ),
                 0,
-            ).cuda()
+            )
         else:
             init = torch.zeros(1, gt_points, 3).cuda()
 
@@ -355,17 +336,21 @@ def run(cfg: DictConfig) -> str:
             module, gt_points, voxel_src, iters=cfg["lvd"].iters, init=init
         )
 
+        reg_src_raw = reg_src.copy()
+
         # apply inv_Rx, trasl, scale to the reg_src
         reg_src = reg_src * scale + trasl
         reg_src = transformations.transform_points(reg_src, inv_Rx)
 
         # FIT SMPL Model to the LVD Prediction
+        # print(reg_src.shape)
+        # print(gt_idxs.shape)
+        # exit()
         # out_s, params = SMPLX_fitting(
         #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
         # )
         # out_s, params = fit_smplx_3(smplx_model, reg_src, gt_idxs)
         out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
-        # print(out_s.shape)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
@@ -386,7 +371,7 @@ def run(cfg: DictConfig) -> str:
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
         T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
-        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
+        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
         # SMPL Refinement with Chamfer
@@ -405,6 +390,7 @@ def run(cfg: DictConfig) -> str:
             mesh_src.vertices = transformations.transform_points(
                 mesh_src.vertices, inv_Rx
             )
+
             out_cham_s, params = fit_cham_smplx(
             # out_cham_s, params = fit_cham_smplx_2(
                 smplx_model,
@@ -428,11 +414,10 @@ def run(cfg: DictConfig) -> str:
                 expression=params_np["expression"].reshape(10),
             )
 
-            print(smplx_model.faces.shape)
             # Save Output
             T = trimesh.Trimesh(vertices=out_cham_s, faces=smplx_model.faces)
-            export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
-            # T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+            # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
+            T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
 
             # DEBUG: Save some params of the fitting to check quality of the registration
             # for p in params.keys():
@@ -448,10 +433,88 @@ def run(cfg: DictConfig) -> str:
         #     T = trimesh.Trimesh(vertices = smpld_vertices, faces = faces)
         #     out_name_grid = out_name + '_+D'
         #     export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name_grid + '.ply')
+
+        gt_scan_path = os.path.join(gt_scan_folder, name, f"{name}.obj")
+        assert os.path.isfile(gt_scan_path)
+        gt_scan_mesh = trimesh.load_mesh(
+            gt_scan_path, maintain_order=True, process=False
+        )
+        gt_scan_vertices = gt_scan_mesh.vertices
+
+        gt_scan_min_xyz = np.min(gt_scan_vertices, axis=0)
+        gt_scan_max_xyz = np.max(gt_scan_vertices, axis=0)
+        gt_scan_center = (gt_scan_min_xyz + gt_scan_max_xyz) / 2.0
+        gt_scan_vertices = gt_scan_vertices - gt_scan_center
+        gt_scan_mesh.vertices = gt_scan_vertices
+        gt_scan_mesh.export(os.path.join(out_dir, "vis", name, f"gt_scan_mesh.obj"))
+
+        hand_points, indices, distances = sample_points_near_hands(
+            scan_points=gt_scan_vertices,        # 扫描点云 (N, 3)
+            smplx_vertices=out_s,  # SMPLX顶点 (10475, 3)
+            radius=0.15,                    # 15cm半径
+            hands_index =two_hands,                    # 双手
+            method='radius'                 # 半径采样
+        )
+        input_points = np.concatenate([input_points, hand_points], axis=0)
+        scan_src = trimesh.PointCloud(input_points)
+
+        Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
+        inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
+
+        scan_src.apply_transform(Rx)
+        voxel_src, mesh_src, scale, trasl = vox_scan(
+            scan_src, res, style=data_type, grad=grad
+        )
+        export_mesh(
+            mesh_src.copy(),
+            inv_Rx,
+            trasl,
+            scale,
+            out_dir + "/vis/" + name + "/aligned_refine.ply",
+        )
+        if cfg["core"].ss_ref:
+            del module, train_data
+            module, MD, train_data, cfg_model = get_model(chk)
+            out_name = out_name + "_refine"
+            et = time.time()
+            module.train()
+            selfsup_ref(
+                module,
+                torch.tensor(np.asarray(scan_src.vertices)),
+                voxel_src,
+                gt_points,
+                steps=cfg["core"].steps_ss,
+                lr_opt=cfg["core"].lr_ss,
+            )
+            module.eval()
+        # init = torch.tensor(out_s[gt_idxs], dtype=torch.float32).unsqueeze(0).cuda()
+        init = torch.tensor(reg_src_raw, dtype=torch.float32).unsqueeze(0).cuda()
+        reg_src = fit_LVD(
+            module, gt_points, voxel_src, iters=cfg["lvd"].iters, init=init
+        )
+        reg_src = reg_src * scale + trasl
+        reg_src = transformations.transform_points(reg_src, inv_Rx)
+        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        params_np = {}
+        for p in params.keys():
+            params_np[p] = params[p].detach().cpu().numpy()
+
+        np.savez(
+            out_dir + "/vis/" + name + "/pred_smplx_info_hands_refine_before_cham_refine.npz",
+            pose=params_np["pose"][:, 3:].reshape(-1, 3),
+            betas=params_np["beta"].reshape(10),
+            global_orient=params_np["pose"][:, :3].reshape(3),
+            transl=params_np["trans"].reshape(3),
+            joints=params_np["joints"].reshape(-1, 3),
+            expression=params_np["expression"].reshape(10),
+        )
+
+        T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
+        T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
         gc.collect()
 
 
-@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_cape")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_4d-dress")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 

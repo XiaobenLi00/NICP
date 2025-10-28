@@ -153,15 +153,15 @@ class AMASSDataset(Dataset):
 
         # We take the length from betas
         # self.len = num_betas
-        print(os.path.join(self.path, str(mode), "betas.pt"))
-        b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
-        self.len = (
-            b.shape[0]
-            if kwargs["n_data"] == 0
-            else np.min((kwargs["n_data"], b.shape[0]))
-        )
-        print(self.len)
-        del b
+        # print(os.path.join(self.path, str(mode), "betas.pt"))
+        # b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
+        # self.len = (
+        #     b.shape[0]
+        #     if kwargs["n_data"] == 0
+        #     else np.min((kwargs["n_data"], b.shape[0]))
+        # )
+        # print(self.len)
+        # del b
         # self.len = len(self.useful_ids)
         # print(
         #     "############ !!!!!!!!!!!!!!!!!! boqian info : self.len = {}".format(
