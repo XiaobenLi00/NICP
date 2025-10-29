@@ -7,7 +7,7 @@ trainer:
   fast_dev_run: False # Enable this for debug purposes
   gpus: 1
   precision: 32
-  max_epochs: 20
+  max_epochs: 40
   max_steps: 1000000000
   accumulate_grad_batches: 1
   num_sanity_val_steps: 2
@@ -35,6 +35,16 @@ callbacks:
     verbose: False
     monitor: ${train.monitor.metric}
     mode: ${train.monitor.mode}
+    filename: 'best-epoch_{epoch:02d}'
+
+  - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    save_top_k: -1
+    verbose: False
+    every_n_epochs: 1
+    monitor: ${train.monitor.metric}
+    mode: ${train.monitor.mode}
+    # filename: 'epoch_{epoch:02d}'
+    # save_on_train_epoch_end: True 
 
   - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     logging_interval: "step"

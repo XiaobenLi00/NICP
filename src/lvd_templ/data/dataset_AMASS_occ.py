@@ -161,6 +161,8 @@ class AMASSDataset(Dataset):
         #     else np.min((kwargs["n_data"], b.shape[0]))
         # )
         # print(self.len)
+        self.len = 120454
+        # exit()
         # del b
         # self.len = len(self.useful_ids)
         # print(
