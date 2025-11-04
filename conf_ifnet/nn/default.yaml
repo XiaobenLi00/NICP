@@ -18,7 +18,7 @@ data:
       _target_: lvd_templ.data.dataset_AMASS_occ.AMASSDataset
       version:  ${nn.data.datasets.version}
       n_data:   ${nn.data.datasets.n_data}
-      data_path: "/home/lixiaoben/projects/NICP/datafolder/AMASS/out_nicp_smplx_n_new/"        #TODO: update path to the processed data
+      data_path: "/home/lixiaoben/projects/NICP/datafolder_new/AMASS/out_nicp_smplx_n_new/"        #TODO: update path to the processed data
       n_points: ${nn.data.datasets.n_points} 
       template: ${nn.data.datasets.template}
       seed_idxs: 0

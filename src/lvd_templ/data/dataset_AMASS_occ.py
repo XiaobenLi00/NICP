@@ -154,14 +154,51 @@ class AMASSDataset(Dataset):
         # We take the length from betas
         # self.len = num_betas
         # print(os.path.join(self.path, str(mode), "betas.pt"))
-        # b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
-        # self.len = (
-        #     b.shape[0]
-        #     if kwargs["n_data"] == 0
-        #     else np.min((kwargs["n_data"], b.shape[0]))
-        # )
-        # print(self.len)
-        self.len = 120454
+        b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
+        full_len = (
+            b.shape[0]
+            if kwargs["n_data"] == 0
+            else np.min((kwargs["n_data"], b.shape[0]))
+        )
+        print("Full dataset length: ", full_len)
+        
+        # Create subset for training mode
+        if self.mode == "train":
+            # Get subset parameters from kwargs
+            subset_ratio = kwargs.get("train_subset_ratio", 0.25)  # Default: use all data
+            subset_size = kwargs.get("train_subset_size", None)  # Alternative: specify exact size
+            
+            if subset_size is not None:
+                # Use specified subset size
+                subset_size = min(subset_size, full_len)
+            elif subset_ratio < 1.0:
+                # Use ratio to determine subset size
+                subset_size = int(full_len * subset_ratio)
+            else:
+                # Use all data
+                subset_size = full_len
+            
+            if subset_size < full_len:
+                # Create reproducible random subset
+                # subset_seed = kwargs.get("train_subset_seed", kwargs["seed_idxs"])
+                # subset_seed  = 42
+                subset_seed  = 43
+                np.random.seed(subset_seed)
+                self.subset_indices = np.random.choice(full_len, subset_size, replace=False)
+                self.subset_indices.sort()  # Sort for efficient data loading
+                self.len = subset_size
+                print(f"Training with subset: {self.len} samples out of {full_len} (ratio: {self.len/full_len:.2%})")
+            else:
+                self.subset_indices = None
+                self.len = full_len
+                print(f"Training with full dataset: {self.len} samples")
+        else:
+            # For validation/test, use all data
+            self.subset_indices = None
+            self.len = full_len
+            print(f"{self.mode.capitalize()} dataset: {self.len} samples")
+        
+        # self.len = 120454
         # exit()
         # del b
         # self.len = len(self.useful_ids)
@@ -175,6 +212,12 @@ class AMASSDataset(Dataset):
         return self.len
 
     def __getitem__(self, idx):
+        # Map subset index to actual data index if using subset
+        if self.subset_indices is not None:
+            actual_idx = self.subset_indices[idx]
+        else:
+            actual_idx = idx
+            
         data = {}
 
         # Take the vertices
@@ -184,7 +227,7 @@ class AMASSDataset(Dataset):
                 str(self.mode),
                 "ifnet_indi",
                 "verts_" + str(self.type),
-                str(f"{int(idx):09}"),
+                str(f"{int(actual_idx):09}"),
             )
             + ".pt"
         )
@@ -196,7 +239,7 @@ class AMASSDataset(Dataset):
                 str(self.mode),
                 "ifnet_indi",
                 self.type,
-                str(f"{int(idx):09}"),
+                str(f"{int(actual_idx):09}"),
             )
             + ".pt"
         )

@@ -88,7 +88,9 @@ def get_model(chk):
     # chk_zip = "datafolder_new/CutPartial_CAPE/epoch=68-step=224318.ckpt.zip"
     # chk_zip = "datafolder_new/SingleView_CAPE/epoch=76-step=250326.ckpt.zip"
     # chk_zip = "/home/public/NICP_gen/gen_train_cape_validate/epoch=78-step=149862.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=39-step=602279.ckpt.zip"
+    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
 
@@ -143,9 +145,10 @@ def run(cfg: DictConfig) -> str:
     # out_dir = out_folder + model_name + '/' + 'cape_gen_hitpts'
     # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
-    # input_type = "pred_inner_points"
-    input_type = "hitpts"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_77_x_lovd_amass"
+    input_type = "pred_inner_points"
+    # input_type = "hitpts"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_epoch_39"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_sub_100_epoch_99"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
     # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
@@ -175,11 +178,15 @@ def run(cfg: DictConfig) -> str:
     # exit()
 
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
-    scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4: len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4:]
-    scans = scans_part4
+    # scans_part1 = scans[: len(scans) // 4]
+    # scans_part2 = scans[len(scans) // 4: len(scans) // 2]
+    # scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
+    # scans_part4 = scans[3 * len(scans) // 4:]
+    # scans = scans_part4
+    seed = 0
+    np.random.seed(seed)
+    scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
+
     # filtering and sampling with ratio=4
     # print("start filtering scans with eval ids")
     # eval_ids = ['00122', '00159', '00215']

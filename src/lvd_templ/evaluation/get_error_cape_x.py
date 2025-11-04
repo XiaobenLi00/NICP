@@ -30,7 +30,8 @@ def main():
     # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_500_50_cape"
     # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_500_500_cape"
     # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_gen_cape"
-    pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_gen+_cape"
+    # pred_folder = "output/matchAMASS_CAPE/cape_pred_inner_points_gen+_cape"
+    pred_folder = "output/matchAMASS/cape_pred_inner_points_x_lovd_amass_epoch_39"
 
     # gt_smpl_folder = "datafolder/4D-DRESS/data_processed/smplh"
     # pred_folder = "/home/boqian/code/NICP/output/matchAMASS_4D-DRESS/demo"

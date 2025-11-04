@@ -7,7 +7,7 @@ trainer:
   fast_dev_run: False # Enable this for debug purposes
   gpus: 1
   precision: 32
-  max_epochs: 40
+  max_epochs: 100
   max_steps: 1000000000
   accumulate_grad_batches: 1
   num_sanity_val_steps: 2
@@ -17,6 +17,7 @@ trainer:
 
 restore:
   ckpt_or_run_path: null
+  # ckpt_or_run_path: "storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=39.ckpt.zip"
   mode: continue # null, finetune, hotstart, continue
 
 monitor:

@@ -50,6 +50,8 @@ from lvd_templ.evaluation.utils import (
 from lvd_templ.evaluation.fit_SMPL import fit_smpl
 
 from lvd_templ.evaluation.fit_SMPLX import fit_smplx
+
+from lvd_templ.evaluation.fit_SMPLX import fit_smplx_hand_refine
 from lvd_templ.evaluation.fit_SMPLX_3 import fit_smplx_3
 
 import warnings
@@ -153,7 +155,7 @@ def run(cfg: DictConfig) -> str:
     input_type = "pred_inner_points"
     # input_type = "hitpts"
     out_dir = (
-        out_folder + model_name + "/" + f"4d-dress_{input_type}_79_x_lovd_amass_hands_refine"
+        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_lovd_amass_epoch_18_hands_refine_only"
     )
 
     if not (os.path.exists(out_dir)):
@@ -174,11 +176,15 @@ def run(cfg: DictConfig) -> str:
         scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
     # scans = sorted(np.load(out_dir + "/remaining_scans.npy"))
     gt_scan_folder = "datafolder_new/4D-DRESS/data_reorganized/model"
-    scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4 :]
-    scans = scans_part4
+    scans_part1 = scans[: len(scans) // 8]
+    scans_part2 = scans[len(scans) // 8 : len(scans) // 8 *2]
+    scans_part3 = scans[len(scans) // 8 *2 : len(scans) // 8 *3]
+    scans_part4 = scans[len(scans) // 8 *3 : len(scans) // 8 *4]
+    scans_part5 = scans[len(scans) // 8 *4 : len(scans) // 8 *5]
+    scans_part6 = scans[len(scans) // 8 *5 : len(scans) // 8 *6]
+    scans_part7 = scans[len(scans) // 8 *6 : len(scans) // 8 *7]
+    scans_part8 = scans[len(scans) // 8 *7 :]
+    scans = scans_part8
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")
@@ -494,7 +500,7 @@ def run(cfg: DictConfig) -> str:
         )
         reg_src = reg_src * scale + trasl
         reg_src = transformations.transform_points(reg_src, inv_Rx)
-        out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        out_s, params = fit_smplx_hand_refine(smplx_model, reg_src, gt_idxs, params)
         params_np = {}
         for p in params.keys():
             params_np[p] = params[p].detach().cpu().numpy()

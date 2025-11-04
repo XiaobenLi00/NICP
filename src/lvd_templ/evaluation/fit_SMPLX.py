@@ -10,6 +10,235 @@ import os
 import theseus as th
 
 
+def fit_smplx_hand_refine(
+    smplx_model,
+    in_points,
+    gt_idxs,
+    params=None,
+    steps_stage1=50,
+    lr_stage1=1e-1,
+):
+    print("Start fitting SMPLX, refine hands only")
+    # in_points = in_points[::10]  # (69, 3)
+    # gt_idxs = gt_idxs[::10]  # (69,)
+    # print(in_points.shape)
+    # print(gt_idxs)
+    # print(len(gt_idxs))
+
+    B = 1
+    pred_markers_position = (
+        torch.from_numpy(in_points)
+        .to(torch.device("cuda"), dtype=torch.float32)
+        .unsqueeze(0)
+    )  # (1, 69, 3)
+    # print(pred_markers_position.shape)
+    loss_weights = {
+        "marker_loss": 1.0,
+        # "mean_shape_loss": 1e-2 * 10 ** 0,
+        # "point_mesh_distance": 1.0 * 10 ** 2,
+        # "part_pmdistance": 1.0,
+        # "pose_prior_loss": 1e-7 * 10 ** 0,
+    }
+    def marker_error_fn_1(optim_vars, aux_vars):
+        (
+            lhand_pose,
+            rhand_pose,
+        ) = optim_vars
+        (global_orient,
+        body_pose,
+        jaw_pose,
+        leye_pose,
+        reye_pose,
+        expression,
+        shape,
+        translation,
+        pred_markers_position)= aux_vars
+
+        batch_size = shape.tensor.shape[0]
+
+        # forward
+        smplx_output = smplx_model(
+            global_orient=global_orient.tensor,
+            body_pose=body_pose.tensor,
+            betas=shape.tensor,
+            expression=expression.tensor,
+            jaw_pose=jaw_pose.tensor,
+            leye_pose=leye_pose.tensor,
+            reye_pose=reye_pose.tensor,
+            left_hand_pose=lhand_pose.tensor,
+            right_hand_pose=rhand_pose.tensor,
+            transl=translation.tensor,
+            return_verts=True,
+        )
+        smplx_vertices = smplx_output.vertices  # shape(B, V, 3)
+
+        marker_vindices = (
+            torch.tensor(list(gt_idxs), device=smplx_vertices.device)
+            .unsqueeze(0)
+            .expand(batch_size, -1)
+        )
+        forwarded_markers_position = torch.gather(
+            smplx_vertices, 1, marker_vindices.unsqueeze(-1).expand(-1, -1, 3)
+        )  # shape(B, num_markers, 3)
+
+        err = pred_markers_position.tensor - forwarded_markers_position
+        err = err.reshape(batch_size, -1)
+
+        return err
+
+    # STAGE 1: OPTIMIZE HAND POSE ONLY
+    print("Optimization stage 0:")
+
+    pose = params["pose"].detach().clone().to(torch.device("cuda"))
+    shape = params["beta"].detach().clone().to(torch.device("cuda"))
+    expression = params["expression"].detach().clone().to(torch.device("cuda"))
+    translation = params["trans"].detach().clone().to(torch.device("cuda"))
+
+    global_orient = pose[:, :3]
+    body_pose = pose[:, 3:66]
+    jaw_pose = pose[:, 66:69]
+    leye_pose = pose[:, 69:72]
+    reye_pose = pose[:, 72:75]
+    lhand_pose = pose[:, 75:120]
+    rhand_pose = pose[:, 120:165]
+
+    # Convert optimizable parameters to Theseus Vectors
+    lhand_pose_optim = th.Vector(tensor=lhand_pose, name="lhand_pose")
+    rhand_pose_optim = th.Vector(tensor=rhand_pose, name="rhand_pose")
+
+    # Convert fixed parameters to Theseus Variables (non-optimizable)
+    global_orient_var = th.Variable(tensor=global_orient, name="global_orient")
+    body_pose_var = th.Variable(tensor=body_pose, name="body_pose")
+    jaw_pose_var = th.Variable(tensor=jaw_pose, name="jaw_pose")
+    leye_pose_var = th.Variable(tensor=leye_pose, name="leye_pose")
+    reye_pose_var = th.Variable(tensor=reye_pose, name="reye_pose")
+    expression_var = th.Variable(tensor=expression, name="expression")
+    shape_var = th.Variable(tensor=shape, name="shape")
+    translation_var = th.Variable(tensor=translation, name="translation")
+
+    pred_markers_position = th.Variable(
+        tensor=pred_markers_position, name="pred_markers_position"
+    )
+
+    optim_vars = [
+        lhand_pose_optim,
+        rhand_pose_optim,
+    ]
+    aux_vars = [
+        global_orient_var,
+        body_pose_var,
+        jaw_pose_var,
+        leye_pose_var,
+        reye_pose_var,
+        expression_var,
+        shape_var,
+        translation_var,
+        pred_markers_position,
+    ]
+
+    w_marker = th.ScaleCostWeight(loss_weights["marker_loss"])
+    marker_cost_function = th.AutoDiffCostFunction(
+        optim_vars,
+        marker_error_fn_1,
+        len(gt_idxs) * 3,
+        cost_weight=w_marker,
+        aux_vars=aux_vars,
+        name="marker_cost_function",
+    )
+
+    objective = th.Objective().to(torch.device("cuda"))
+    objective.add(marker_cost_function)
+    optimizer = th.LevenbergMarquardt(
+        objective, max_iterations=steps_stage1, step_size=lr_stage1
+    )
+    theseus_layer = th.TheseusLayer(optimizer).to(torch.device("cuda"))
+
+    theseus_inputs = {
+        "lhand_pose": lhand_pose_optim,
+        "rhand_pose": rhand_pose_optim,
+        "global_orient": global_orient_var,
+        "body_pose": body_pose_var,
+        "jaw_pose": jaw_pose_var,
+        "leye_pose": leye_pose_var,
+        "reye_pose": reye_pose_var,
+        "expression": expression_var,
+        "shape": shape_var,
+        "translation": translation_var,
+        "pred_markers_position": pred_markers_position,
+    }
+
+    updated_inputs, _ = theseus_layer.forward(
+        theseus_inputs, optimizer_kwargs={"verbose": False}
+    )  # TODO: damping = ??
+
+    lhand_pose_updated = updated_inputs["lhand_pose"]
+    rhand_pose_updated = updated_inputs["rhand_pose"]
+    # print(translation)
+    # exit()
+
+    # get final smpl meshes
+    smplx_output = smplx_model(
+        global_orient=global_orient,
+        body_pose=body_pose,
+        betas=shape,
+        expression=expression,
+        jaw_pose=jaw_pose,
+        leye_pose=leye_pose,
+        reye_pose=reye_pose,
+        left_hand_pose=lhand_pose_updated,
+        right_hand_pose=rhand_pose_updated,
+        transl=translation,
+        return_verts=True,
+    )
+    joints = smplx_output.joints  # shape(B, J, 3)
+
+    final_mesh_list = []
+    for b in range(B):
+        final_smpl_mesh = trimesh.Trimesh(
+            smplx_output.vertices[b].detach().cpu().numpy(),
+            smplx_model.faces,
+            process=False,
+            maintain_order=True,
+        )
+        final_mesh_list.append(final_smpl_mesh)
+
+    # output_smpl_info = [
+    #     pose.detach().cpu().numpy().reshape(B, 23, 3),
+    #     shape.detach().cpu().numpy(),
+    #     global_orient.detach().cpu().numpy(),
+    #     translation.detach().cpu().numpy(),
+    #     joints.detach().cpu().numpy(),
+    # ]
+
+    output_smplx_info = {}
+    output_smplx_info["pose"] = torch.nn.Parameter(
+        torch.cat(
+            [
+                global_orient,
+                body_pose,
+                jaw_pose,
+                leye_pose,
+                reye_pose,
+                lhand_pose_updated,
+                rhand_pose_updated,
+            ],
+            dim=1,
+        )
+    )
+    output_smplx_info["beta"] = torch.nn.Parameter(shape)
+    output_smplx_info["expression"] = torch.nn.Parameter(expression)
+    # output_smpl_info["global_orient"] = global_orient.detach().cpu().numpy()
+    output_smplx_info["trans"] = torch.nn.Parameter(translation)
+    output_smplx_info["joints"] = joints
+    # shape(B, 23, 3), shape(B, 10), shape(B, 3), shape(B, 3), shape(B, 45, 3)
+
+    return (
+        final_mesh_list[0].vertices,
+        # pred_markers_position.tensor,
+        output_smplx_info,
+    )
+
+
 def fit_smplx(
     smplx_model,
     in_points,

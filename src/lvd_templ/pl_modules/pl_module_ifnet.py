@@ -236,6 +236,12 @@ class LightUniversal(pl.LightningModule):
             self.selfsup = kwargs["selfsup"]
         else:
             self.selfsup = False
+
+          # Do we want an unsupervised loss? -> Does not work
+        if "unsupervised" in kwargs.keys():
+            self.unsup = kwargs["unsupervised"]
+        else:
+            self.unsup = 0
         
         # Do we want to use a powerful IFNET?
         if "powerup" in kwargs.keys():

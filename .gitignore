@@ -39,3 +39,4 @@ __pycache__
 *.so
 training/data/preprocess_voxels
 storage
+temp
