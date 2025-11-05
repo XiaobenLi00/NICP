@@ -154,6 +154,7 @@ class AMASSDataset(Dataset):
         # We take the length from betas
         # self.len = num_betas
         # print(os.path.join(self.path, str(mode), "betas.pt"))
+        """
         b = torch.load(os.path.join(self.path, str(mode), "betas.pt"))
         full_len = (
             b.shape[0]
@@ -197,6 +198,7 @@ class AMASSDataset(Dataset):
             self.subset_indices = None
             self.len = full_len
             print(f"{self.mode.capitalize()} dataset: {self.len} samples")
+        """
         
         # self.len = 120454
         # exit()

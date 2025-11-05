@@ -30,7 +30,9 @@ def main():
     # pred_folder = "output/matchAMASS_4D-DRESS/4d-dress_hitpts_79_x_new_fit"
     # pred_folder = "output/matchAMASS/4d-dress_hitpts_79_x_lovd_amass"
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_79_x_lovd_amass"
-    pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_79_x_lovd_amass_hands_refine"
+    # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_79_x_lovd_amass_hands_refine"
+    # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_lovd_amass_epoch_18_hands_refine_only"
+    pred_folder = "output/matchAMASS/4d-dress_hitpts_x_lovd_amass_sub_100_epoch_99"
 
     # visualization_material_folder = "datafolder/4D-DRESS/data_processed/model_for_visualization"
 
@@ -106,8 +108,8 @@ def main():
     for name in tqdm(os.listdir(os.path.join(pred_folder, "vis"))):
 
         # v2v
-        # pred_smpl_path = os.path.join(pred_folder, "vis", name, "out4d-dress_ss.ply")
-        pred_smpl_path = os.path.join(pred_folder, "vis", name, "out4d-dress_ss_refine.ply")
+        pred_smpl_path = os.path.join(pred_folder, "vis", name, "out4d-dress_ss.ply")
+        # pred_smpl_path = os.path.join(pred_folder, "vis", name, "out4d-dress_ss_refine.ply")
         if not os.path.isfile(pred_smpl_path):
             continue
 
@@ -194,16 +196,16 @@ def main():
 
         # mpjpe
         # considered_joints_num = 22
-        # pred_info = np.load(
-        #     os.path.join(
-        #         pred_folder, "vis", name, "pred_smplx_info_before_cham_refine.npz"
-        #     )
-        # )
         pred_info = np.load(
             os.path.join(
-                pred_folder, "vis", name, "pred_smplx_info_hands_refine_before_cham_refine.npz"
+                pred_folder, "vis", name, "pred_smplx_info_before_cham_refine.npz"
             )
         )
+        # pred_info = np.load(
+        #     os.path.join(
+        #         pred_folder, "vis", name, "pred_smplx_info_hands_refine_before_cham_refine.npz"
+        #     )
+        # )
         pred_joints = pred_info["joints"]
         # print(pred_joints.shape)
 
