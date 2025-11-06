@@ -139,8 +139,8 @@ def run(cfg: DictConfig) -> str:
         os.mkdir(out_folder + model_name)
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
-    # input_type = "pred_inner_points"
-    input_type = "hitpts"
+    input_type = "pred_inner_points"
+    # input_type = "hitpts"
     out_dir = (
         out_folder + model_name + "/" + f"4d-dress_{input_type}_x_lovd_amass_sub_100_epoch_99"
     )
