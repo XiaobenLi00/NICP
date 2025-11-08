@@ -33,7 +33,10 @@ def main():
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_79_x_lovd_amass_hands_refine"
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_lovd_amass_epoch_18_hands_refine_only"
     # pred_folder = "output/matchAMASS/4d-dress_hitpts_x_lovd_amass_sub_100_epoch_99"
-    pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_lovd_amass_sub_100_epoch_99"
+    # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_lovd_amass_sub_100_epoch_99"
+    # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_amass_30k_sub_100_epoch_94"
+    # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_cloth3d_50k_amass_30k_epoch_99"
+    pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_cloth3d_50k_amass_60k_sub_100_epoch_74"
 
     # visualization_material_folder = "datafolder/4D-DRESS/data_processed/model_for_visualization"
 

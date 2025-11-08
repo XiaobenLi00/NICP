@@ -90,7 +90,10 @@ def get_model(chk):
     # chk_zip = "/home/public/NICP_gen/gen_train_cape_validate/epoch=78-step=149862.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=39-step=602279.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/4249542k_30k/checkpoints/epoch=99-step=376499.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=74-step=564674.ckpt.zip"
+    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=99.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
 
@@ -148,7 +151,8 @@ def run(cfg: DictConfig) -> str:
     input_type = "pred_inner_points"
     # input_type = "hitpts"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_epoch_39"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_sub_100_epoch_99"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_120k_sub_100_epoch_99"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_30k_epoch_99"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
     # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
@@ -157,9 +161,10 @@ def run(cfg: DictConfig) -> str:
         os.mkdir(out_dir + "/vis")
 
     # path_in = "datafolder/CAPE_reorganized/cape_release/eval_outputs/cape_epoch_32_test"
-    path_in = (
-        "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
-    )
+    # path_in = (
+    #     "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
+    # )
+    path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_cape_vis/epoch_66_eval/vis"
     # path_in = "output/matchAMASS_CAPE/test"
     # path_in = "datafolder_new/CutPartial_CAPE/cape_55f_partial_raw"
     # path_in = "datafolder_new/SingleView_CAPE/cape_55f_singleview_raw"
@@ -178,11 +183,11 @@ def run(cfg: DictConfig) -> str:
     # exit()
 
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
-    # scans_part1 = scans[: len(scans) // 4]
-    # scans_part2 = scans[len(scans) // 4: len(scans) // 2]
-    # scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
-    # scans_part4 = scans[3 * len(scans) // 4:]
-    # scans = scans_part4
+    scans_part1 = scans[: len(scans) // 4]
+    scans_part2 = scans[len(scans) // 4: len(scans) // 2]
+    scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
+    scans_part4 = scans[3 * len(scans) // 4:]
+    # scans = scans_part1
     seed = 0
     np.random.seed(seed)
     scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
