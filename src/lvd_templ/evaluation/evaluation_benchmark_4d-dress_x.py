@@ -93,7 +93,7 @@ def get_model(chk):
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=29-step=451709.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/4249542k_30k/checkpoints/epoch=99-step=376499.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=59-step=451739.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=99.ckpt.zip"
+    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=69.ckpt.zip"
 
 
 
@@ -148,7 +148,7 @@ def run(cfg: DictConfig) -> str:
             #     out_folder + model_name + "/" + f"4d-dress_{input_type}_x_amass_30k_sub_100_epoch_94"
     # )
     out_dir = (
-        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_cloth3d_50k_amass_120k_sub_100_epoch_99"
+        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_cloth3d_50k_amass_120k_epoch_69"
     )
 
     if not (os.path.exists(out_dir)):
@@ -178,10 +178,10 @@ def run(cfg: DictConfig) -> str:
     scans_part6 = scans[5 * len(scans) // 8 : 3 * len(scans) // 4]
     scans_part7 = scans[3 * len(scans) // 4 : 7 * len(scans) // 8]
     scans_part8 = scans[7 * len(scans) // 8 :]
-    # scans = scans_part8
-    seed = 0
-    np.random.seed(seed)
-    scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
+    scans = scans_part8
+    # seed = 0
+    # np.random.seed(seed)
+    # scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
 
 
     # print(f"number of scans: {len(scans)}")
