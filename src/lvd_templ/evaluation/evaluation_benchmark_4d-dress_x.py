@@ -87,13 +87,13 @@ def get_model(chk):
     # chk_zip = (
     #     "./storage/matchAMASS_4D-DRESS/checkpoints/epoch=79-step=593999_x.ckpt.zip"
     # )
-    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
+    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=19-step=301139.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=29-step=451709.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/4249542k_30k/checkpoints/epoch=99-step=376499.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=59-step=451739.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=69.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=69.ckpt.zip"
 
 
 
@@ -148,7 +148,7 @@ def run(cfg: DictConfig) -> str:
             #     out_folder + model_name + "/" + f"4d-dress_{input_type}_x_amass_30k_sub_100_epoch_94"
     # )
     out_dir = (
-        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_gen_500_500_amass_120k_epoch_69"
+        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_cloth3d_50k_amass_120k_epoch_18"
     )
 
     if not (os.path.exists(out_dir)):
@@ -160,8 +160,8 @@ def run(cfg: DictConfig) -> str:
     # path_in = get_dataset(cfg['core'].challenge)
     # path_in = '/home/boqian/code/NICP/datafolder/4D-DRESS/data_processed/model'
     # path_in = "datafolder_new/4D-DRESS/data_reorganized/epoch_37_eval/vis"
-    # path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_4d-dress_vis/epoch_66_eval/vis"
-    path_in = "/home/public/data/ETCH-X_inner_points/4d-dress/epoch_0_eval_500_500_4d-dress/vis"
+    path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_4d-dress_vis/epoch_66_eval/vis"
+    # path_in = "/home/public/data/ETCH-X_inner_points/4d-dress/epoch_0_eval_500_500_4d-dress/vis"
 
     assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
 

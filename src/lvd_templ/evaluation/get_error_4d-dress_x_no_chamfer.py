@@ -36,7 +36,7 @@ def main():
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_lovd_amass_sub_100_epoch_99"
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_amass_30k_sub_100_epoch_94"
     # pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_cloth3d_50k_amass_30k_epoch_99"
-    pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_cloth3d_50k_amass_60k_epoch_59"
+    pred_folder = "output/matchAMASS/4d-dress_pred_inner_points_x_cloth3d_50k_amass_120k_epoch_69"
 
     # visualization_material_folder = "datafolder/4D-DRESS/data_processed/model_for_visualization"
 
