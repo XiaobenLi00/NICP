@@ -92,8 +92,8 @@ def get_model(chk):
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=39-step=602279.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/4249542k_30k/checkpoints/epoch=99-step=376499.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=69-step=527029.ckpt.zip"
-    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=99.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=69-step=527029.ckpt.zip"
+    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=19.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
 
@@ -151,7 +151,7 @@ def run(cfg: DictConfig) -> str:
     input_type = "pred_inner_points"
     # input_type = "hitpts"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_epoch_39"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_60k_epoch_69"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_120k_epoch_19"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_30k_epoch_99"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
     # out_dir = out_folder + model_name + "/" + f"test"
@@ -187,7 +187,7 @@ def run(cfg: DictConfig) -> str:
     scans_part2 = scans[len(scans) // 4: len(scans) // 2]
     scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
     scans_part4 = scans[3 * len(scans) // 4:]
-    # # scans = scans_part1
+    scans = scans_part4
     # seed = 0
     # np.random.seed(seed)
     # scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
