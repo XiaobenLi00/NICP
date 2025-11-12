@@ -151,8 +151,8 @@ def run(cfg: DictConfig) -> str:
     input_type = "pred_inner_points"
     # input_type = "hitpts"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_epoch_39"
-    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_120k_epoch_19"
-    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_30k_epoch_99"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_120k_epoch_19"
+    out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_100k_amass_120k_epoch_19"
     # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
     # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
@@ -164,7 +164,8 @@ def run(cfg: DictConfig) -> str:
     # path_in = (
     #     "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
     # )
-    path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_cape_vis/epoch_66_eval/vis"
+    # path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_cape_vis/epoch_66_eval/vis"
+    path_in = "output/tightness_vectors/cloth3d_tv_100k/eval_outputs_cape_vis/epoch_42_eval/vis"
     # path_in = "output/matchAMASS_CAPE/test"
     # path_in = "datafolder_new/CutPartial_CAPE/cape_55f_partial_raw"
     # path_in = "datafolder_new/SingleView_CAPE/cape_55f_singleview_raw"
@@ -183,11 +184,11 @@ def run(cfg: DictConfig) -> str:
     # exit()
 
     # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
-    scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4: len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4:]
-    scans = scans_part4
+    scans_part1 = scans[: len(scans) // 3]
+    scans_part2 = scans[len(scans) // 3: 2 * len(scans) // 3]
+    scans_part3 = scans[2 * len(scans) // 3:]
+    # scans_part4 = scans[3 * len(scans) // 4:]
+    scans = scans_part3
     # seed = 0
     # np.random.seed(seed)
     # scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
