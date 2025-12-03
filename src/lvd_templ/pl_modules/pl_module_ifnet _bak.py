@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-pylogger = logging.getLogger(__name__)
+
 
 from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 import hydra
@@ -12,28 +12,23 @@ from torch.optim import Optimizer
 from nn_core.common import PROJECT_ROOT
 from nn_core.model_logging import NNLogger
 from lvd_templ.data.datamodule_AMASS import MetaData
-from lvd_templ.modules.module import PointNetBasis, PointNetGlob, TemplateNet, Network_LVD, Network_LVD_PowerUP, Network_LVD_PowerUP2
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
+from lvd_templ.modules.module import Network_LVD, Network_LoVD
 
 from human_body_prior.body_model.body_model import BodyModel
-import random
-import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
 import wandb
 from plotly.subplots import make_subplots
-from sklearn.neighbors import NearestNeighbors
+
 import scipy.io as sio 
+
+pylogger = logging.getLogger(__name__)
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 s_max = torch.nn.Softmax(dim=1)
 
-# CHANGE PATH
-bm_fname = "/home/ubutnu/Documents/Projects/AMASS/support_data/body_models/smplh/neutral/model.npz"
-
-
 num_betas = 16  # number of body parameters
-num_dmpls = 8  # number of DMPL parameters
+num_dmpls = 8   # number of DMPL parameters
 
 ######## UTILITY FUNCTIONS #############
 def plot_RGBmap(
@@ -156,8 +151,6 @@ def color_f(src, freq=1):
 def render_result(res):
     fig = plot_RGBmap([res[:, 0:3]], [None], colors=[res[:, 3:]])
     return fig
-
-
 ####### END UTILITY FUNCTIONS ############
 
 ####### START LOSS FUNCTIONS ############
@@ -208,18 +201,10 @@ def loss_desc(phi_A,phi_B,G_A,G_B):
 ####### END LOSS FUNCTIONS ############
 
 
-
 class LightUniversal(pl.LightningModule):
     logger: NNLogger
                 
-    ### THIS IS A FUNCTION TO FETCH VALUES FROM THE CONFIG
-    ### IT CAN BE USED FOR RETROCOMPATIBILITY OF THE CODE
-    ### I.E.: IF YOU ADD A NEW PARAMETER IN  THE YAMLS, LOADING
-    ### A PREVIOUS CHECKPOINT MIGHT FAIL DUE TO MISALIGNMENT OF
-    ### LIGHTNING MODULE AND YAML. SO HERE YOU CAN FETCH THE VALUES
-    ### AND SPECIFY DEFAULT VALUES IF PARAMETER NOT FOUND IN THE YAML
-    
-    
+    ### THIS IS A FUNCTION TO FETCH VALUES FROM THE CONFIG   
     def fetch_kwargs(self, kwargs):
         
         
@@ -234,38 +219,29 @@ class LightUniversal(pl.LightningModule):
         # Do we want to match against a template?
         self.if_templ = kwargs["template"]
         if self.if_templ:
-            bm = BodyModel(bm_fname=bm_fname, num_betas=num_betas)
+            bm = BodyModel(bm_fname=kwargs['smpl_path'], num_betas=num_betas)
             self.template = bm.forward().v.to(self.dev)
         
         # N Points    
         self.n_points = kwargs["n_points"]
-        
-        # LVD or baselines (Universal, LIE)?
-        self.paradigm = kwargs["paradigm"]    
-        if self.paradigm == "LIE":
-            self.n_basis = kwargs["n_basis"]
-            self.n_desc = kwargs["n_desc"]
-        elif self.paradigm == "Uni":
-            self.n_basis = kwargs["n_basis"]
-            self.n_desc = kwargs["n_desc"]
          
         # Set the clamp for the LVD Prediction
         if "clamp" in kwargs.keys():
             self.clamp = kwargs["clamp"]
         else:
             self.clamp = 0.3
-
-        # Do we use local strategy? TODO:WHAT?
-        if "locality" in kwargs.keys():
-            self.locality = kwargs["locality"]
-        else:
-            self.locality = 0
-            
+           
         # SELFSUP Training -> Does not work
         if "selfsup" in kwargs.keys():
             self.selfsup = kwargs["selfsup"]
         else:
             self.selfsup = False
+
+          # Do we want an unsupervised loss? -> Does not work
+        if "unsupervised" in kwargs.keys():
+            self.unsup = kwargs["unsupervised"]
+        else:
+            self.unsup = 0
         
         # Do we want to use a powerful IFNET?
         if "powerup" in kwargs.keys():
@@ -317,42 +293,17 @@ class LightUniversal(pl.LightningModule):
         else:
             self.clamp_style = 0
         
-        # Do we want positional encoding as a feature? -> Does not work    
-        if "positional" in kwargs.keys():
-            self.positional = kwargs["positional"]
-        else:
-            self.positional = 0           
-        
-        if self.positional > 0:
-            dd = sio.loadmat('laplacian.mat')
-            self.pos_enc = dd['evecs'][:,-self.positional-1:-1]*10000
-            self.pos_enc = np.reshape(self.pos_enc,(1,self.positional,64,64,64))
-            self.pos_enc = torch.tensor(np.repeat(self.pos_enc,4,axis=0)).float().to(self.dev)
-        self.input_dim += self.positional
-        
         # Number of LVD heads
         if "segm" in kwargs.keys():
             self.segm = kwargs["segm"]
         else:
             self.segm = 0
         
-        # Do we want an unsupervised loss? -> Does not work
-        if "unsupervised" in kwargs.keys():
-            self.unsup = kwargs["unsupervised"]
+                           
+        if "paradigm" in kwargs.keys():
+            self.paradigm = kwargs["paradigm"]
         else:
-            self.unsup = 0
-        
-        # Fancy: you can optimize LVD without a magnitude, and only consider the vector angle        
-        if "onlydir" in kwargs.keys():
-            self.onlydir = kwargs["onlydir"]
-        else:
-            self.onlydir = 0
-        
-        # Some preliminar experiment with BEHAVE                        
-        if "behave" in kwargs.keys():
-            self.behave = kwargs["behave"]
-        else:
-            self.behave = 0                
+            self.behave = "LoVD"                
                 
         
     def __init__(self, metadata: Optional[MetaData] = None, *args, **kwargs) -> None:
@@ -381,33 +332,25 @@ class LightUniversal(pl.LightningModule):
         self.fetch_kwargs(kwargs)
 
         # LVD: A model, with a learnable context, and a query method for novel PCs
-        if self.paradigm in ["LVD","LoVD"]:  # LVD: A model, with a learnable context, and a query method for novel PCs
+        if self.paradigm == "LoVD":  # LoVD: A model, with a learnable context, and a query method for novel PCs
             if self.powerup==1:
-                self.model = Network_LVD_PowerUP(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels, unsup=self.unsup)            
-            elif self.powerup==2:
-                self.model = Network_LVD_PowerUP2(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, power_factor = self.power_factor, segm=self.segm)   
+                self.model = Network_LoVD(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), segm=self.segm, labels=self.labels)            
             else:
-                self.model = Network_LVD(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm)
+                self.model = Network_LoVD(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm)
                 
         # Universal embedding Baseline
         if self.paradigm == "Uni":  # Universal embedding: A network for incoming PC and one network for the Template
-            self.model = Network_LVD_PowerUP(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels, paradigm = 'Uni')
+            self.model = Network_LoVD(self.size_layers, self.gt_points*3, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels, paradigm = 'Uni')
 
         # LIE Baseline
         if self.paradigm == "LIE":  # LIE: We learn basis and Descriptors
             self.models = {}
-            self.models['basis'] = Network_LVD_PowerUP(self.size_layers, self.n_basis, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels).cuda()
-            self.models['desc']  = Network_LVD_PowerUP(self.size_layers, self.n_desc, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels).cuda()
+            self.models['basis'] = Network_LoVD(self.size_layers, self.n_basis, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels).cuda()
+            self.models['desc']  = Network_LoVD(self.size_layers, self.n_desc, res=self.occ_res, input_dim=self.input_dim , b_min = np.array([-0.8, -0.8, -0.8]), b_max = np.array([0.8, 0.8, 0.8]), selfsup=self.selfsup, segm=self.segm, labels=self.labels).cuda()
 
             self.model = self.models['basis'] 
             self.flag_mode = 'basis'
         
-        # Preliminary things for behave -> does not work
-        if self.behave:
-            import pickle
-            file = open("/mnt/sda/dummy.pkl",'rb')
-            object_file = pickle.load(file)
-            self.laplacian = torch.tensor(object_file['evecs'][:,0:4000],dtype=torch.float32).to(self.dev)
    
    # USEFUL FUNCTION FOR LIE BASELINE
     def change_mode(self,mode):
@@ -417,7 +360,6 @@ class LightUniversal(pl.LightningModule):
         self.flag_mode = mode
         self.model = self.models[mode]     
             
-              
     def forward(self, x) -> torch.Tensor:
         if self.paradigm == "Uni":
             return self.model(x)
@@ -435,38 +377,23 @@ class LightUniversal(pl.LightningModule):
         self._target_smpl  = batch['smpl_vertices'].float().to(self.dev)
         _B = self._input_voxels.shape[0]
         
-        # If you want the gradient, I add to input features TODO: I THINK THE LAST THREE FEATURES ARE IDENTICAL, THIS MIGHT BE SOMETHING USELESS
-        if self.grad:
-            self._input_voxels = torch.cat((torch.clamp(self._input_voxels, 0, 0.01)*100,
-                                            torch.clamp(self._input_voxels, 0, 0.02)*50,
-                                            torch.clamp(self._input_voxels, 0, 0.05)*20,
-                                            torch.clamp(self._input_voxels, 0, 0.10)*20,
-                                            torch.clamp(self._input_voxels, 0, 0.15)*15,
-                                            torch.clamp(self._input_voxels, 0, 0.20)*10,
-                                            
-                                            torch.gradient(self._input_voxels,axis=2)[0]*self.grad,
-                                            torch.gradient(self._input_voxels,axis=3)[0]*self.grad,
-                                            torch.gradient(self._input_voxels,axis=4)[0]*self.grad,
-                                            
-                                            torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
-                                            torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
-                                            torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
-                                            
-                                            self._input_voxels
-                                            ), 1)
-        else:
-            self._input_voxels = torch.cat((torch.clamp(self._input_voxels, 0, 0.01)*100,
-                                            torch.clamp(self._input_voxels, 0, 0.02)*50,
-                                            torch.clamp(self._input_voxels, 0, 0.05)*20,
-                                            torch.clamp(self._input_voxels, 0, 0.10)*20,
-                                            torch.clamp(self._input_voxels, 0, 0.15)*15,
-                                            torch.clamp(self._input_voxels, 0, 0.20)*10,
-                                            self._input_voxels
-                                            ), 1)
-        
-        # IF YOU WANT OPOSITIONAL ENCODING, ADD IT TO THE FEATURES
-        if self.positional:
-            self._input_voxels = torch.cat((self._input_voxels, self.pos_enc[0:self._input_voxels.shape[0]]),1)
+        self._input_voxels = torch.cat((torch.clamp(self._input_voxels, 0, 0.01)*100,
+                                        torch.clamp(self._input_voxels, 0, 0.02)*50,
+                                        torch.clamp(self._input_voxels, 0, 0.05)*20,
+                                        torch.clamp(self._input_voxels, 0, 0.10)*20,
+                                        torch.clamp(self._input_voxels, 0, 0.15)*15,
+                                        torch.clamp(self._input_voxels, 0, 0.20)*10,
+                                        
+                                        torch.gradient(self._input_voxels,axis=2)[0]*self.grad,
+                                        torch.gradient(self._input_voxels,axis=3)[0]*self.grad,
+                                        torch.gradient(self._input_voxels,axis=4)[0]*self.grad,
+                                        
+                                        torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
+                                        torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
+                                        torch.clamp((torch.abs(torch.gradient(self._input_voxels,axis=2)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=3)[0]) + torch.abs(torch.gradient(self._input_voxels,axis=4)[0])),-0.1,0.1)*self.grad,
+                                        
+                                        self._input_voxels
+                                        ), 1)
         
          # Not needed, but if needed, you can reshape the input_voxels
         if  self._input_voxels.shape[2]==64 or self._input_voxels.shape[2]==128:
@@ -476,11 +403,10 @@ class LightUniversal(pl.LightningModule):
         else:
            self._input_voxels2 = torch.reshape(self._input_voxels,(_B,self._input_voxels.shape[1],128,128,128))
 
-        #### HERE FOR EACH PARADIGM WE SPECIFY HOW TRAINING AND TEST SHOULD BE PERFORMED  ####
-
-
-        #### START LVD ####
-        if self.paradigm == "LVD":
+        #### HOW TRAINING AND TEST SHOULD BE PERFORMED  ####
+        
+        #### START LoVD ####
+        if self.paradigm == "LoVD":
             log = {}
             
             # FIRST, WE COMPUTE THE GT VERTEX DESCENT, NO GRAD NEEDED
@@ -502,90 +428,18 @@ class LightUniversal(pl.LightningModule):
             self.model(self._input_voxels2)
             _numpoints = self._input_points.shape[1]
 
-            # IN THE FOLLOWING YOU COULD JUMP TO [GOTO: THIS]
+            # Predict the LVD for the sampled points
+            pred = self.model.query(self._input_points)
+            pred = pred.reshape(_B, self.gt_points, 3, _numpoints).permute(0, 1, 3, 2)
             
-            # LOCALITY SHOULD BE 0
-            if self.locality==2:
-                log["loss_l2"] = torch.tensor(0,device='cuda')
-                self._loss_tot = torch.tensor(0,device='cuda')
-            else:                
-                # UNSUP DOES NOT WORK TODO: CHECK OR REMOVE?
-                if self.unsup:         
-                    pred, dist_func = self.model.query(self._input_points)
-                    pred = pred.reshape(_B, self.gt_points, 3, _numpoints).permute(0, 1, 3, 2)
-                    dist_func_clip = torch.clip(dist_func, -1*clamp, clamp)
-                    self._loss_L2 = torch.abs(dist_func_clip - torch.min(torch.linalg.norm(pred,2,axis=-1),axis=1)[0]).mean()
-                    
-                ## [THIS]    
-                else:
-                    # Predict the LVD for the sampled points
-                    pred = self.model.query(self._input_points)
-                    pred = pred.reshape(_B, self.gt_points, 3, _numpoints).permute(0, 1, 3, 2)
-                    
-                    # If we optimize onl the direction, we compute cosine similiarity
-                    if self.onlydir:
-                        cosi = torch.nn.CosineSimilarity(dim=3)
-                        self._loss_L2 = (-1 * cosi(pred, dist)).mean()
-                    
-                    # Otherwise L1 error
-                    else:
-                        self._loss_L2 = torch.abs(dist - pred)
-                        self._loss_L2 = self._loss_L2.mean()
+            # L1 error
+            self._loss_L2 = torch.abs(dist - pred)
+            self._loss_L2 = self._loss_L2.mean()
                         
                     
-                log["loss_l2"] = self._loss_L2
-                self._loss_tot = self._loss_L2
-                
-            # This should be ignored 
-            if (self.locality):
-                if(self.locality==1):                   
-                    # Pick only n_fine_sampled vertices
-                    slice_start = self.n_uniform
-                    slice_end = self.n_uniform + self.n_fine_sampled      
-                    slice_range = np.arange(slice_start,slice_end)
-                    
-                    # Improve over them
-                    self._loss_loc = torch.abs(dist[:,:,slice_range] - pred[:,:,slice_range])
-                    self._loss_loc = self._loss_loc.mean() * self.locality
-                    
-                    self._loss_tot  = self._loss_L2  + self._loss_loc 
-                    log["loss_loc"] = self._loss_loc 
-                    self._loss_tot = self._loss_tot + self._loss_loc
-                    
-                elif self.locality==2:
-                    self.local_smpl  = batch['local_smpl'].float().to(self.dev)
-                    with torch.no_grad():
-                        dist = self.local_smpl - self._target_smpl
-                        if self.clamp_style == 0:
-                            dist = torch.clip(dist, -1*clamp, clamp)
-                        if self.clamp_style == 1:
-                            norms = torch.linalg.norm(dist,2,axis=-1,keepdim=True)
-                            factors = torch.clip(norms, 0, self.max_norm) / norms
-                            dist = dist * factors
-                    
-                        
-                    pred = self.model.query(self.local_smpl)
-                    pred = pred.reshape(_B, self.gt_points, 3, self.gt_points).permute(0, 1, 3, 2)
-                    pred = pred[:,np.arange(self.gt_points),np.arange(self.gt_points),:]
-                    self._loss_loc = torch.abs(dist - pred)
-                    self._loss_loc = self._loss_loc.mean()
-                    self._loss_tot = self._loss_tot + self._loss_loc
-                    
-                    log["loss_loc"] = self._loss_loc 
-            
-            # This should be ignored
-            if self.selfsup == True:
-                vox = self.model.self_sup()
-                out_shape = vox.reshape(_B,self.gt_points,3)
-                loss_ss = torch.sum((out_shape - self._target_smpl)**2)*1e-3
-                inds = np.arange(self.gt_points)
-                pred_gt = self.model.query(self._target_smpl)[:, inds, inds]
-                v = torch.sum(pred_gt**2)
-                
-                log["loss_ss"] = loss_ss
-                self._loss_tot  = self._loss_tot + loss_ss
-                
-                
+            log["loss_l2"] = self._loss_L2
+            self._loss_tot = self._loss_L2
+
             # COMPLETE LOSS TO LOG    
             log["loss"] = self._loss_tot
             
@@ -648,61 +502,6 @@ class LightUniversal(pl.LightningModule):
 
         ## END UNIVERSAL  ##
         
-        ## START LIE ##
-        if self.paradigm == "LIE":
-            log = {}
-            if self.flag_mode == 'basis':
-                self.models['basis'](self._input_voxels2)
-                pred = self.models['basis'].query(self._target_smpl)
-                pred_src = torch.transpose(pred[:-1, :, :],1,2)
-                pred_tar = torch.transpose(pred[1:, :, :],1,2)
-                tar =  self._target_smpl[1:]
-                src =  self._target_smpl[:-1]
-                loss = loss_basis(pred_src, pred_tar, tar)
-                log["loss"] = loss
-                log["loss_l2"] = loss
-                
-            if self.flag_mode == 'desc':
-                self.models['basis'] = self.models['basis'].cuda()
-                self.models['basis'](self._input_voxels2)
-                pred_basis = self.models['basis'].query(self._target_smpl)
-                pred_basis = torch.transpose(pred_basis,1,2)
-                
-                self.models['desc'](self._input_voxels2)
-                pred_desc = self.models['desc'].query(self._target_smpl)
-                pred_desc = torch.transpose(pred_desc,1,2)
-                
-                basis_A = pred_basis[1:,:,:]; basis_B = pred_basis[:-1,:,:] 
-                desc_A = pred_desc[1:,:,:]; desc_B = pred_desc[:-1,:,:] 
-
-                basis_A = pred_basis[1:,:,:]; basis_B = pred_basis[:-1,:,:] 
-                desc_A = pred_desc[1:,:,:]; desc_B = pred_desc[:-1,:,:] 
-                pc_A = self._target_smpl[1:]; pc_B = self._target_smpl[:-1]
-
-                loss = loss_desc(basis_A, basis_B, desc_A, desc_B) 
-                log["loss"] = loss
-                log["loss_l2"] = loss
-                
-            # TEST FOR LIE IS BROKEN TODO: CHECK                    
-            # if test:
-            #     with torch.no_grad():
-            #         m = self.desc_match(basis_A,basis_B,desc_A,desc_B)
-            #         ct_np = tar.detach().cpu().numpy()
-            #         rec_errs = [np.sqrt(np.sum((ct_np[i, m[1][i]] - ct_np[i]) ** 2)) for i in range(ct_np.shape[0])]
-            #         m_error = np.mean(rec_errs)
-            #         src, tar, both = pcs_renderings(src, tar, m)
-            #         return {
-            #             "logits": pred.detach(),
-            #             "loss": loss,
-            #             "src": src,
-            #             "tar": tar,
-            #             "both": both,
-            #             "m_error": m_error,
-            #         }
-
-        # If Not test, for all methods return:
-        return log
-
     def set_input(self, input):
         self._input_voxels = input['input_voxels'].float().to(self.dev)
         self._input_points = input['input_points'].float().to(self.dev)
@@ -725,19 +524,6 @@ class LightUniversal(pl.LightningModule):
         match = torch.min(c, 1)
         m = match[1].detach().cpu().numpy()
         return m
-
-    # MATCH -> USING DESCRIPTORS
-    def desc_match(b1,b2,d1,d2):
-        neigh = NearestNeighbors(n_neighbors=1)
-
-        F = (np.linalg.pinv(b1) @ d1)
-        G = (np.linalg.pinv(b2) @ d2).T
-
-        C_my = (F @ np.linalg.pinv(G).T)
-
-        best_b1 = b1 @ C_my
-        tree = neigh.fit(best_b1)
-        return neigh.kneighbors(b2, return_distance=False)
         
     # THIS IS WHAT TO DO IF YOU ARE IN TRAINING    
     def training_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
@@ -751,25 +537,6 @@ class LightUniversal(pl.LightningModule):
                 on_epoch=True,
                 prog_bar=True,
             )             
-        if self.locality:
-            self.log_dict(
-                {"loss/train_loc": step_out["loss_loc"].cpu().detach(),}
-                 ,
-                on_step=True,
-                on_epoch=True,
-                prog_bar=True,
-            )      
-        if self.selfsup:
-            # Log
-            self.log_dict(
-                {
-                 "loss/train_ss": step_out["loss_ss"].cpu().detach(),
-                 },
-                on_step=True,
-                on_epoch=True,
-                prog_bar=True,
-            )
-        
         # Log
         self.log_dict(
             {"loss/train": step_out["loss"].cpu().detach(),
@@ -840,3 +607,4 @@ class LightUniversal(pl.LightningModule):
             return [opt]
         scheduler = hydra.utils.instantiate(self.hparams.lr_scheduler, optimizer=opt)
         return [opt], [scheduler]
+

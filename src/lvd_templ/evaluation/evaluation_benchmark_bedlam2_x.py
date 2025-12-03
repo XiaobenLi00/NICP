@@ -12,7 +12,6 @@ import torch
 import trimesh
 import gc
 import pickle
-import time
 import sys
 
 sys.path.append("/home/lixiaoben/projects/NICP")
@@ -85,36 +84,40 @@ def export_mesh(T, r, t, s, path):
 def get_model(chk):
     # Recovering the Path to the checkpoint
     # chk_zip = glob.glob(chk + "checkpoints/*.zip")[0]
-    # chk_zip = (
-    #     "./storage/matchAMASS_4D-DRESS/checkpoints/epoch=79-step=593999_x.ckpt.zip"
-    # )
+    # chk_zip = "./storage/matchAMASS_CAPE/checkpoints/epoch=77-step=253577_x.ckpt.zip"
+    chk_zip = (
+        "./storage/matchAMASS_4D-DRESS/checkpoints/epoch=79-step=593999_x.ckpt.zip"
+    )
+    # chk_zip = "datafolder_new/CutPartial_CAPE/epoch=68-step=224318.ckpt.zip"
+    # chk_zip = "datafolder_new/SingleView_CAPE/epoch=76-step=250326.ckpt.zip"
+    # chk_zip = "/home/public/NICP_gen/gen_train_cape_validate/epoch=78-step=149862.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/7vt6ljxb/checkpoints/epoch=18-step=286082.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=39-step=602279.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/best-epoch_epoch=99.ckpt.zip"
-    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=19-step=301139.ckpt.zip"
-    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq/checkpoints/epoch=29-step=451709.ckpt.zip"
     # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/4249542k_30k/checkpoints/epoch=99-step=376499.ckpt.zip"
-    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=59-step=451739.ckpt.zip"
-    chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=69.ckpt.zip"
-
-
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/14ceqpps_60k/checkpoints/epoch=69-step=527029.ckpt.zip"
+    # chk_zip = "/home/lixiaoben/projects/NICP/storage/matchAMASS/c3tj2heq_120k/checkpoints/best-epoch_epoch=19.ckpt.zip"
 
     print(f"loading model ckpt: {chk_zip}")
 
     # Restoring the network configurations using the Hydra Settings
     tmp = hydra.core.global_hydra.GlobalHydra.instance().clear()
     tmp = initialize(config_path="../../../" + str(chk))
+    # tmp = initialize(config_path="../../" + str(chk))
     cfg_model = compose(config_name="config")
 
     # Recovering the metadata
-    # print(cfg_model.nn.data.datasets.train)
     # cfg_model.nn.data.datasets.train["train_ids"] = (
-    #     "datafolder_new/useful_data_4d-dress/train_ids.pkl"
+    #     "datafolder_new/useful_data_cape/train_ids.pkl"
     # )
     # cfg_model.nn.data.datasets.train["val_ids"] = (
-    #     "datafolder_new/useful_data_4d-dress/val_ids_sampled_ratio10.pkl"
+    #     "datafolder_new/useful_data_cape/val_ids.pkl"
     # )
+    # print(cfg_model.nn.data.datasets.train)
+    # exit()
     train_data = hydra.utils.instantiate(cfg_model.nn.data.datasets.train, mode="test")
     MD = MetaData(class_vocab=train_data.class_vocab)
+    # print(train_data.class_vocab)
 
     # Instantiating the correct nentwork
     model: pl.LightningModule = hydra.utils.instantiate(
@@ -124,6 +127,8 @@ def get_model(chk):
     # Restoring the old checkpoint
     old_checkpoint = NNCheckpointIO.load(path=chk_zip)
     module = model._load_model_state(checkpoint=old_checkpoint, metadata=MD).to(device)
+    # print(module)
+    # exit()
     module.model.eval()
 
     return module, MD, train_data, cfg_model
@@ -134,7 +139,8 @@ def run(cfg: DictConfig) -> str:
     os.chdir(home_dir)
 
     # Recovering the parameters of the run
-    model_name = cfg["core"].checkpoint
+    # model_name = cfg["core"].checkpoint
+    model_name = "matchAMASS_4D-DRESS"
     chk = chk_pts + model_name + "/"
     model_name = model_name
 
@@ -143,50 +149,59 @@ def run(cfg: DictConfig) -> str:
         os.mkdir(out_folder + model_name)
 
     # out_dir = out_folder + model_name + '/' + cfg['core'].challenge
-    input_type = "pred_inner_points"
-    # input_type = "hitpts"
-            # out_dir = (
-            #     out_folder + model_name + "/" + f"4d-dress_{input_type}_x_amass_30k_sub_100_epoch_94"
-    # )
-    out_dir = (
-        out_folder + model_name + "/" + f"4d-dress_{input_type}_x_cloth3d_100k_amass_120k_epoch_69_test"
-    )
+    # out_dir = out_folder + model_name + '/' + 'cape_gen_hitpts'
+    # out_dir = out_folder + model_name + '/' + 'cape_eq_hitpts'
 
+    # input_type = "pred_inner_points"
+    input_type = "hitpts"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_lovd_amass_epoch_39"
+    out_dir = out_folder + model_name + "/" + f"bedlam2_{input_type}_x_4d-dress_epoch_79"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_x_cloth3d_50k_amass_30k_epoch_99"
+    # out_dir = out_folder + model_name + "/" + f"cape_{input_type}_gen_cape"
+    # out_dir = out_folder + model_name + "/" + f"test"
     if not (os.path.exists(out_dir)):
         os.mkdir(out_dir)
     if not (os.path.exists(out_dir + "/vis")):
         os.mkdir(out_dir + "/vis")
 
+    # path_in = "datafolder/CAPE_reorganized/cape_release/eval_outputs/cape_epoch_32_test"
+    # path_in = (
+    #     "datafolder_new/CAPE_reorganized/cape_release/eval_outputs/epoch_73_eval/vis"
+    # )
+    # path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_cape_vis/epoch_66_eval/vis"
+    # path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_bedlam2_vis/epoch_66_eval/vis"
+    path_in = "output/tightness_vectors/4d-dress_tv/eval_outputs_bedlam2_vis/epoch_37_eval/vis"
+    # path_in = "output/matchAMASS_CAPE/test"
+    # path_in = "datafolder_new/CutPartial_CAPE/cape_55f_partial_raw"
+    # path_in = "datafolder_new/SingleView_CAPE/cape_55f_singleview_raw"
+    assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
+
     # Recover Data Path
     # path_in = get_dataset(cfg['core'].challenge)
-    # path_in = '/home/boqian/code/NICP/datafolder/4D-DRESS/data_processed/model'
-    # path_in = "datafolder_new/4D-DRESS/data_reorganized/epoch_37_eval/vis"
-    # path_in = "output/tightness_vectors/cloth3d_tv_50k/eval_outputs_4d-dress_vis/epoch_66_eval/vis"
-    path_in = "output/tightness_vectors/cloth3d_tv_100k/eval_outputs_4d-dress_vis/epoch_45_eval/vis"
-    # path_in = "/home/public/data/ETCH-X_inner_points/4d-dress/epoch_0_eval_500_500_4d-dress/vis"
-
-    assert os.path.isdir(path_in), f"Path {path_in} is not an existing directory"
+    # path_in = '/home/lixiaoben/projects/NICP/datafolder/CAPE_reorganized/cape_release/model_ratio20_from_PTF/'
 
     # How the data are organized
     if cfg["core"].challenge in ("demo", "demo_guess_rot"):
         # all_scans = glob.glob(os.path.join(path_in, '*/*.obj'))
         scans = sorted(glob.glob(os.path.join(path_in, "*/*.npz")))
+        # scans = sorted(glob.glob(os.path.join(path_in, "*.obj")))
+    # print(f"number of scans: {len(scans)}")
+    # exit()
 
-    # scans = sorted(np.load(out_dir + "/remaining_scans.npy"))
+    # scans = sorted(np.load(out_dir + '/remaining_scans.npy'))
     scans_part1 = scans[: len(scans) // 4]
-    scans_part2 = scans[len(scans) // 4 : len(scans) // 2]
-    scans_part3 = scans[len(scans) // 2 : 3 * len(scans) // 4]
-    scans_part4 = scans[3 * len(scans) // 4 : len(scans)]
-    # scans_part5 = scans[len(scans) // 2 : 5 * len(scans) // 8]
-    # scans_part6 = scans[5 * len(scans) // 8 : 3 * len(scans) // 4]
-    # scans_part7 = scans[3 * len(scans) // 4 : 7 * len(scans) // 8]
-    # scans_part8 = scans[7 * len(scans) // 8 :]
+    scans_part2 = scans[len(scans) // 4: len(scans) // 2]
+    scans_part3 = scans[len(scans) // 2: 3 * len(scans) // 4]
+    scans_part4 = scans[3 * len(scans) // 4:]
     scans = scans_part4
     # seed = 0
     # np.random.seed(seed)
     # scans = np.random.choice(scans, min(100, len(scans)), replace=False).tolist()
 
-
+    # filtering and sampling with ratio=4
+    # print("start filtering scans with eval ids")
+    # eval_ids = ['00122', '00159', '00215']
+    # Get all existing output directories
     # print(f"number of scans: {len(scans)}")
     # existing_ids = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
     # print(f"number of existing ids: {len(existing_ids)}")
@@ -199,18 +214,16 @@ def run(cfg: DictConfig) -> str:
     #         filtered_scans.append(scan)
     # print(f"number of remaining scans: {len(filtered_scans)}")
     # scans = filtered_scans
+
+    # # np.save(out_dir + '/scans_part1.npy', scans_part1)
+    # # np.save(out_dir + '/scans_part2.npy', scans_part2)
+    # # scans = np.load(out_dir + '/scans_part2.npy')
     # np.save(out_dir + '/remaining_scans.npy', scans)
     # exit()
 
-    # filtering and sampling with ratio=4
-    # print("start filtering scans with eval ids")
-    # eval_ids = pickle.load(open("/home/boqian/code/NICP/datafolder/useful_data_4d-dress/val_ids_sampled_ratio10.pkl", "rb"))
-    # # print(os.path.basename(all_scans[0]).split('.')[0][10:])
-
-    # scans = sorted([scan for scan in all_scans if os.path.basename(scan).split('.')[0] in eval_ids])
-    # # divide scans into two parts
-
+    # scans = sorted([scan for scan in all_scans if os.path.basename(scan)[:5] in eval_ids])
     print(f"number of target eval scans: {len(scans)}")
+    # print(f"number of filtered target eval scans: {len(filtered_scans)}")
     # exit()
 
     print("--------------------------------------------")
@@ -223,8 +236,15 @@ def run(cfg: DictConfig) -> str:
     # if cfg['core'].challenge in ('demo','demo_guess_rot'):
     #     alpha = np.pi/2 #0
     # else:
-    alpha = np.pi/2
-    # alpha = 0
+    # alpha = np.pi/2
+    alpha = 0
+    # Rx = trimesh.transformations.rotation_matrix(alpha, xaxis)
+    # inv_Rx = trimesh.transformations.rotation_matrix(-alpha, xaxis)
+
+    # print(Rx)
+    # print(inv_Rx)
+
+    # exit()
 
     ### Get SMPL model
     # SMPL_model = SMPL('neutral_smpl_with_cocoplus_reg.txt', obj_saveable = True).cuda()
@@ -252,16 +272,17 @@ def run(cfg: DictConfig) -> str:
         print(f"Start :{scan}")
 
         # Basic Name --> You can add "tag" if you want to differentiate the runs
-        out_name = "out" + cfg["core"].tag
+        out_name = cfg["core"].tag
 
         # Scans name format
         # if(cfg['core'].challenge == 'demo'):
         #     name = os.path.basename(os.path.dirname(scan))
         # else:
         name = os.path.basename(scan)[23:-4]
-        # id_ = os.path.basename(scan).split('.')[0]
+        # name = os.path.basename(scan)[:-4]
         id_ = name
         # print(id_)
+        # exit()
         smplx_model_path = "datafolder_new/body_models/smplx/SMPLX_NEUTRAL.pkl"
         smplx_model = SMPLX(
             model_path=smplx_model_path,
@@ -278,7 +299,7 @@ def run(cfg: DictConfig) -> str:
 
         # Read input shape
         # scan_src = trimesh.load(scan, process=False, maintain_order=True)
-        # input_points = np.load(scan)['hitpts']
+        # input_points = np.load(scan)['pred_inner_points']
         input_points = np.load(scan)[input_type]
         scan_src = trimesh.PointCloud(input_points)
 
@@ -290,6 +311,7 @@ def run(cfg: DictConfig) -> str:
         voxel_src, mesh_src, scale, trasl = vox_scan(
             scan_src, res, style=data_type, grad=grad
         )
+        # print(f"scale: {scale}, trasl: {trasl}")
 
         # Save algined mesh
         if not (os.path.exists(out_dir + "/vis/" + name)):
@@ -299,6 +321,13 @@ def run(cfg: DictConfig) -> str:
             trasl = trasl * 0
             scale = 1
             inv_Rx = np.eye(4)
+        # export_mesh(
+        #     mesh_src.copy(),
+        #     np.eye(4),
+        #     trasl * 0,
+        #     1,
+        #     out_dir + "/vis/" + name + "/aligned_raw.ply",
+        # )
 
         export_mesh(
             mesh_src.copy(),
@@ -310,7 +339,6 @@ def run(cfg: DictConfig) -> str:
         # k = mesh_src.export(out_dir +'/'+ name + '/aligned.ply')
 
         #######
-        et = time.time()
 
         # IF N-ICP is requested, run it
         if cfg["core"].ss_ref:
@@ -336,7 +364,7 @@ def run(cfg: DictConfig) -> str:
                     np.asarray(mesh_src.vertices[picker]), dtype=torch.float32
                 ),
                 0,
-            )
+            ).cuda()
         else:
             init = torch.zeros(1, gt_points, 3).cuda()
 
@@ -350,14 +378,12 @@ def run(cfg: DictConfig) -> str:
         reg_src = transformations.transform_points(reg_src, inv_Rx)
 
         # FIT SMPL Model to the LVD Prediction
-        # print(reg_src.shape)
-        # print(gt_idxs.shape)
-        # exit()
         # out_s, params = SMPLX_fitting(
         #     smplx_model, reg_src, gt_idxs, prior, iterations=2000
         # )
         # out_s, params = fit_smplx_3(smplx_model, reg_src, gt_idxs)
         out_s, params = fit_smplx(smplx_model, reg_src, gt_idxs)
+        # print(out_s.shape)
         # out_s, params = fit_smpl(SMPL_model, reg_src, gt_idxs)
         params_np = {}
         for p in params.keys():
@@ -372,15 +398,13 @@ def run(cfg: DictConfig) -> str:
             joints=params_np["joints"].reshape(-1, 3),
             expression=params_np["expression"].reshape(10),
         )
-        time_fit = time.time() - et
-        print(f"Time for fitting SMPLX: {time_fit} seconds")
 
         # Save intermidiate output
         # NOTE: You may want to remove this if you are interested only
         # in the final registration
         T = trimesh.Trimesh(vertices=out_s, faces=smplx_model.faces)
         T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
-        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
+        # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
         # np.save(out_dir +'/'+ name + '/loss_' + out_name + '.npy',params_np)
 
         # SMPL Refinement with Chamfer
@@ -399,7 +423,6 @@ def run(cfg: DictConfig) -> str:
             mesh_src.vertices = transformations.transform_points(
                 mesh_src.vertices, inv_Rx
             )
-
             out_cham_s, params = fit_cham_smplx(
             # out_cham_s, params = fit_cham_smplx_2(
                 smplx_model,
@@ -423,10 +446,11 @@ def run(cfg: DictConfig) -> str:
                 expression=params_np["expression"].reshape(10),
             )
 
+            print(smplx_model.faces.shape)
             # Save Output
             T = trimesh.Trimesh(vertices=out_cham_s, faces=smplx_model.faces)
-            # export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/'+ name + '/' + out_name + '.ply')
-            T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
+            export_mesh(T.copy(), inv_Rx, trasl, scale, out_dir +'/vis/'+ name + '/' + out_name + '.ply')
+            # T.export(out_dir + "/vis/" + name + "/" + out_name + ".ply")
 
             # DEBUG: Save some params of the fitting to check quality of the registration
             # for p in params.keys():
@@ -445,7 +469,7 @@ def run(cfg: DictConfig) -> str:
         gc.collect()
 
 
-@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_4d-dress")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf_test"), config_name="default_cape")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 
