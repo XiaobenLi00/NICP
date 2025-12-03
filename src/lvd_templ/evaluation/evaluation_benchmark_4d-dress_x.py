@@ -12,6 +12,7 @@ import torch
 import trimesh
 import gc
 import pickle
+import time
 import sys
 
 sys.path.append("/home/lixiaoben/projects/NICP")
